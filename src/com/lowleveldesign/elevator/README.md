@@ -13,8 +13,13 @@ LOOK/SCAN algorithm.
    - [controller](#controller)
    - [demo](#demo)
 3. [Flow of the System](#flow-of-the-system)
-4. [Design Patterns Used](#design-patterns-used)
-5. [Extending the Design](#extending-the-design)
+4. [Diagrams](#diagrams)
+   - [Use Case Diagram](#use-case-diagram)
+   - [Class Diagram](#class-diagram)
+   - [Sequence Diagram](#sequence-diagram)
+   - [Activity Diagram](#activity-diagram)
+5. [Design Patterns Used](#design-patterns-used)
+6. [Extending the Design](#extending-the-design)
    - [More Scheduling Strategies](#more-scheduling-strategies)
    - [Multithreading](#multithreading)
    - [Concurrency](#concurrency)
@@ -121,6 +126,247 @@ Passenger → Building → ElevatorController → SchedulingStrategy → Elevato
                                                               ElevatorController.stepAll()
                                                                         │
                                                               Elevator.step() (LOOK) → Door open/close → Display
+```
+
+## Diagrams
+
+> Diagrams are written in [Mermaid](https://mermaid.js.org/) and render
+> natively on GitHub. If your viewer doesn't support Mermaid, paste the code
+> blocks into the [Mermaid Live Editor](https://mermaid.live).
+
+### Use Case Diagram
+
+```mermaid
+graph LR
+    Passenger((Passenger))
+    Technician((Maintenance<br/>Technician))
+
+    subgraph "Elevator System"
+        UC1([Request Elevator<br/>Hall Call])
+        UC2([Select Destination Floor])
+        UC3([View Floor / Direction Display])
+        UC4([Open / Close Door])
+        UC5([Dispatch Nearest Elevator])
+        UC6([Move Elevator - LOOK/SCAN])
+        UC7([Configure Scheduling Strategy])
+        UC8([Take Elevator Out of Service])
+    end
+
+    Passenger --> UC1
+    Passenger --> UC2
+    Passenger --> UC3
+    UC1 --> UC5
+    UC5 --> UC6
+    UC6 --> UC4
+    UC2 -.include.-> UC6
+    UC1 -.include.-> UC5
+    Technician --> UC7
+    Technician --> UC8
+```
+
+- **Passenger** raises hall calls (`Request Elevator`) and destination calls
+  (`Select Destination Floor`), and observes the `Display`.
+- **Maintenance Technician** represents an administrative actor that can swap
+  the `SchedulingStrategy` or pull an elevator out of service (a natural
+  extension point on `ElevatorController`).
+- `Dispatch Nearest Elevator` and `Move Elevator` are system-driven use cases
+  triggered as a consequence of passenger actions (`include` relationships).
+
+### Class Diagram
+
+```mermaid
+classDiagram
+    class Direction {
+        <<enumeration>>
+        UP
+        DOWN
+        IDLE
+    }
+
+    class RequestType {
+        <<enumeration>>
+        EXTERNAL
+        INTERNAL
+    }
+
+    class DoorState {
+        <<enumeration>>
+        OPEN
+        CLOSED
+    }
+
+    class ElevatorState {
+        <<enumeration>>
+        IDLE
+        MOVING
+        STOPPED
+    }
+
+    class Request {
+        -int floor
+        -Direction direction
+        -RequestType type
+        +externalRequest(floor, direction)$ Request
+        +internalRequest(floor)$ Request
+        +getFloor() int
+        +getDirection() Direction
+        +getType() RequestType
+    }
+
+    class Door {
+        -DoorState state
+        +open() void
+        +close() void
+        +getState() DoorState
+    }
+
+    class Display {
+        -int currentFloor
+        -Direction direction
+        +update(elevatorId, floor, direction) void
+    }
+
+    class Elevator {
+        -int id
+        -int capacity
+        -int currentFloor
+        -Direction direction
+        -ElevatorState state
+        -Door door
+        -Display display
+        -TreeSet~Integer~ upStops
+        -TreeSet~Integer~ downStops
+        +addStop(floor) void
+        +step() void
+        +distanceTo(floor) int
+        +hasPendingRequests() bool
+    }
+
+    class SchedulingStrategy {
+        <<interface>>
+        +selectElevator(elevators, request) Elevator
+    }
+
+    class NearestElevatorStrategy {
+        +selectElevator(elevators, request) Elevator
+        -computeCost(elevator, request) int
+    }
+
+    class ElevatorController {
+        -List~Elevator~ elevators
+        -SchedulingStrategy schedulingStrategy
+        -ElevatorController instance$
+        +getInstance(count, capacity)$ ElevatorController
+        +submitHallRequest(floor, direction) void
+        +submitDestinationRequest(elevatorId, floor) void
+        +stepAll() void
+        +anyElevatorBusy() bool
+    }
+
+    class Building {
+        -int numberOfFloors
+        -ElevatorController controller
+        +validateFloor(floor) void
+    }
+
+    class ElevatorSystemDemo {
+        +main(args) void$
+    }
+
+    SchedulingStrategy <|.. NearestElevatorStrategy : implements
+    ElevatorController "1" o-- "many" Elevator : manages
+    ElevatorController "1" --> "1" SchedulingStrategy : uses
+    Building "1" --> "1" ElevatorController : owns
+    Elevator "1" *-- "1" Door : has
+    Elevator "1" *-- "1" Display : has
+    Elevator --> ElevatorState : has state
+    Elevator --> Direction : has direction
+    Door --> DoorState : has state
+    Request --> Direction : uses
+    Request --> RequestType : uses
+    NearestElevatorStrategy ..> Request : reads
+    NearestElevatorStrategy ..> Elevator : ranks
+    ElevatorController ..> Request : creates
+    ElevatorSystemDemo ..> Building : uses
+    ElevatorSystemDemo ..> ElevatorController : uses
+```
+
+### Sequence Diagram
+
+Hall call followed by a destination call, through to elevator arrival:
+
+```mermaid
+sequenceDiagram
+    actor P as Passenger
+    participant B as Building
+    participant EC as ElevatorController
+    participant SS as SchedulingStrategy
+    participant E as Elevator
+    participant D as Door
+    participant Disp as Display
+
+    P->>EC: submitHallRequest(floor=3, UP)
+    EC->>SS: selectElevator(elevators, request)
+    SS-->>EC: bestElevator
+    EC->>E: addStop(3)
+    Note over E: upStops/downStops updated,<br/>direction set if IDLE
+
+    P->>EC: submitDestinationRequest(elevatorId, 7)
+    EC->>E: addStop(7)
+
+    loop until all elevators idle
+        EC->>E: step()
+        E->>Disp: update(id, currentFloor, direction)
+        alt currentFloor is a pending stop
+            E->>E: state = STOPPED
+            E->>D: open()
+            D-->>E: OPEN
+            E->>D: close()
+            D-->>E: CLOSED
+            E->>E: state = MOVING or IDLE
+        end
+    end
+
+    EC-->>P: Elevator arrives, doors cycle at each requested floor
+```
+
+### Activity Diagram
+
+Lifecycle of a single elevator's `step()` execution under the LOOK/SCAN
+algorithm:
+
+```mermaid
+flowchart TD
+    Start([Request submitted]) --> AddStop[Elevator.addStop floor]
+    AddStop --> DirCheck{Direction == IDLE?}
+    DirCheck -->|Yes| SetDir[Set direction toward floor]
+    DirCheck -->|No| Queue[Add floor to upStops/downStops]
+    SetDir --> Queue
+    Queue --> StepLoop{stepAll invoked}
+
+    StepLoop --> DirUp{direction == UP?}
+    DirUp -->|Yes| MoveUp[currentFloor++, update Display]
+    DirUp -->|No| DirDown{direction == DOWN?}
+    DirDown -->|Yes| MoveDown[currentFloor--, update Display]
+
+    MoveUp --> AtStopUp{currentFloor in upStops?}
+    AtStopUp -->|Yes| Arrive[Open door → Close door<br/>remove stop]
+    AtStopUp -->|No| CheckUpEmpty{upStops empty?}
+    Arrive --> CheckUpEmpty
+    CheckUpEmpty -->|Yes, downStops has items| ReverseDown[direction = DOWN]
+    CheckUpEmpty -->|Yes, downStops empty| Idle[direction = IDLE, state = IDLE]
+    CheckUpEmpty -->|No| StepLoop
+
+    MoveDown --> AtStopDown{currentFloor in downStops?}
+    AtStopDown -->|Yes| Arrive
+    AtStopDown -->|No| CheckDownEmpty{downStops empty?}
+    CheckDownEmpty -->|Yes, upStops has items| ReverseUp[direction = UP]
+    CheckDownEmpty -->|Yes, upStops empty| Idle
+    CheckDownEmpty -->|No| StepLoop
+
+    ReverseDown --> StepLoop
+    ReverseUp --> StepLoop
+    Idle --> End([Elevator idle, ready for next request])
 ```
 
 ## Design Patterns Used
