@@ -1,6 +1,13 @@
 package com.lowleveldesign.instacart.test;
 
-import com.lowleveldesign.instacart.inventory.InsufficientStockException;
+import com.lowleveldesign.instacart.exception.InsufficientStockException;
+import com.lowleveldesign.instacart.exception.InvalidOrderException;
+import com.lowleveldesign.instacart.exception.InvalidOrderStateException;
+import com.lowleveldesign.instacart.exception.InvalidProductException;
+import com.lowleveldesign.instacart.exception.InvalidReservationStateException;
+import com.lowleveldesign.instacart.exception.InvalidStoreException;
+import com.lowleveldesign.instacart.exception.ProductNotTrackedException;
+import com.lowleveldesign.instacart.exception.ReservationNotFoundException;
 import com.lowleveldesign.instacart.inventory.InventoryItem;
 import com.lowleveldesign.instacart.inventory.InventoryManager;
 import com.lowleveldesign.instacart.inventory.Reservation;
@@ -58,6 +65,15 @@ public final class TestRunner {
         run("cancelOrder releases every reservation", TestRunner::testCancelOrderReleasesAllItems);
         run("concurrent reservations for limited stock never oversell", TestRunner::testConcurrentReservationRace);
         run("concurrent reservations on different products all succeed", TestRunner::testConcurrentDifferentProducts);
+        run("creating a Product with blank id throws InvalidProductException", TestRunner::testInvalidProductBlankId);
+        run("creating a Product with negative price throws InvalidProductException",
+                TestRunner::testInvalidProductNegativePrice);
+        run("creating a Store with blank id throws InvalidStoreException", TestRunner::testInvalidStoreBlankId);
+        run("placeOrder with no line items throws InvalidOrderException", TestRunner::testPlaceOrderEmptyItemsThrows);
+        run("checkout on an already-confirmed order throws InvalidOrderStateException",
+                TestRunner::testCheckoutTwiceThrows);
+        run("cancelOrder on an already-cancelled order throws InvalidOrderStateException",
+                TestRunner::testCancelOrderTwiceThrows);
 
         System.out.println("\n" + passed + " passed, " + failed + " failed");
         // The manager's background scheduler thread is non-daemon; shut it down so the JVM exits.
@@ -203,8 +219,9 @@ public final class TestRunner {
         manager.confirmReservation(reservation.getReservationId());
         try {
             manager.confirmReservation(reservation.getReservationId());
-            throw new AssertionError("Expected IllegalStateException confirming an already-confirmed reservation");
-        } catch (IllegalStateException expected) {
+            throw new AssertionError(
+                    "Expected InvalidReservationStateException confirming an already-confirmed reservation");
+        } catch (InvalidReservationStateException expected) {
             // expected
         }
         return null;
@@ -214,8 +231,8 @@ public final class TestRunner {
         InventoryManager manager = InventoryManager.getInstance();
         try {
             manager.cancelReservation("does-not-exist");
-            throw new AssertionError("Expected IllegalArgumentException for an unknown reservation id");
-        } catch (IllegalArgumentException expected) {
+            throw new AssertionError("Expected ReservationNotFoundException for an unknown reservation id");
+        } catch (ReservationNotFoundException expected) {
             // expected
         }
         return null;
@@ -257,8 +274,8 @@ public final class TestRunner {
         InventoryManager manager = InventoryManager.getInstance();
         try {
             manager.getAvailableQuantity("no-such-store", "no-such-product");
-            throw new AssertionError("Expected IllegalArgumentException for an untracked (store, product) pair");
-        } catch (IllegalArgumentException expected) {
+            throw new AssertionError("Expected ProductNotTrackedException for an untracked (store, product) pair");
+        } catch (ProductNotTrackedException expected) {
             // expected
         }
         return null;
@@ -438,6 +455,97 @@ public final class TestRunner {
         pool.awaitTermination(5, TimeUnit.SECONDS);
 
         assertEquals(productCount, successCount.get(), "Each thread reserves its own product, all should succeed");
+        return null;
+    }
+
+    // ------------------------------------------------------------------
+    // Custom exception / validation tests
+    // ------------------------------------------------------------------
+
+    private static Void testInvalidProductBlankId() {
+        try {
+            new Product("  ", "Bad Product", "Category", 1.0);
+            throw new AssertionError("Expected InvalidProductException for a blank product id");
+        } catch (InvalidProductException expected) {
+            // expected
+        }
+        return null;
+    }
+
+    private static Void testInvalidProductNegativePrice() {
+        try {
+            new Product(nextId("prod"), "Bad Product", "Category", -0.01);
+            throw new AssertionError("Expected InvalidProductException for a negative price");
+        } catch (InvalidProductException expected) {
+            // expected
+        }
+        return null;
+    }
+
+    private static Void testInvalidStoreBlankId() {
+        try {
+            new Store("", "Bad Store", "Nowhere");
+            throw new AssertionError("Expected InvalidStoreException for a blank store id");
+        } catch (InvalidStoreException expected) {
+            // expected
+        }
+        return null;
+    }
+
+    private static Void testPlaceOrderEmptyItemsThrows() {
+        InventoryManager manager = InventoryManager.getInstance();
+        OrderService orderService = new OrderService(manager);
+        Store store = newStore();
+        try {
+            orderService.placeOrder("cust-1", store.getStoreId(), new ArrayList<>());
+            throw new AssertionError("Expected InvalidOrderException for an order with no line items");
+        } catch (InvalidOrderException expected) {
+            // expected
+        }
+        try {
+            orderService.placeOrder("cust-1", store.getStoreId(), null);
+            throw new AssertionError("Expected InvalidOrderException for a null item list");
+        } catch (InvalidOrderException expected) {
+            // expected
+        }
+        return null;
+    }
+
+    private static Void testCheckoutTwiceThrows() {
+        InventoryManager manager = InventoryManager.getInstance();
+        OrderService orderService = new OrderService(manager);
+        Store store = newStore();
+        Product product = newProduct();
+        manager.stockProduct(store, product, 20, 5);
+
+        Order order = orderService.placeOrder("cust-1", store.getStoreId(),
+                Arrays.asList(new OrderItem(product.getProductId(), 4)));
+        orderService.checkout(order);
+        try {
+            orderService.checkout(order);
+            throw new AssertionError("Expected InvalidOrderStateException checking out an already-confirmed order");
+        } catch (InvalidOrderStateException expected) {
+            // expected
+        }
+        return null;
+    }
+
+    private static Void testCancelOrderTwiceThrows() {
+        InventoryManager manager = InventoryManager.getInstance();
+        OrderService orderService = new OrderService(manager);
+        Store store = newStore();
+        Product product = newProduct();
+        manager.stockProduct(store, product, 20, 5);
+
+        Order order = orderService.placeOrder("cust-1", store.getStoreId(),
+                Arrays.asList(new OrderItem(product.getProductId(), 4)));
+        orderService.cancelOrder(order);
+        try {
+            orderService.cancelOrder(order);
+            throw new AssertionError("Expected InvalidOrderStateException cancelling an already-cancelled order");
+        } catch (InvalidOrderStateException expected) {
+            // expected
+        }
         return null;
     }
 }

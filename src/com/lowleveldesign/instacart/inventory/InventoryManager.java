@@ -1,5 +1,9 @@
 package com.lowleveldesign.instacart.inventory;
 
+import com.lowleveldesign.instacart.exception.InsufficientStockException;
+import com.lowleveldesign.instacart.exception.InvalidReservationStateException;
+import com.lowleveldesign.instacart.exception.ProductNotTrackedException;
+import com.lowleveldesign.instacart.exception.ReservationNotFoundException;
 import com.lowleveldesign.instacart.model.Product;
 import com.lowleveldesign.instacart.model.Store;
 import com.lowleveldesign.instacart.observer.InventoryObserver;
@@ -77,7 +81,7 @@ public final class InventoryManager {
     private InventoryItem getItem(String storeId, String productId) {
         InventoryItem item = inventory.get(key(storeId, productId));
         if (item == null) {
-            throw new IllegalArgumentException("Product " + productId + " is not tracked at store " + storeId);
+            throw new ProductNotTrackedException(productId, storeId);
         }
         return item;
     }
@@ -116,11 +120,10 @@ public final class InventoryManager {
     private Reservation requireActiveReservation(String reservationId) {
         Reservation reservation = reservations.get(reservationId);
         if (reservation == null) {
-            throw new IllegalArgumentException("Unknown reservation: " + reservationId);
+            throw new ReservationNotFoundException(reservationId);
         }
         if (reservation.getStatus() != ReservationStatus.ACTIVE) {
-            throw new IllegalStateException("Reservation " + reservationId + " is not active (status="
-                    + reservation.getStatus() + ")");
+            throw new InvalidReservationStateException(reservationId, reservation.getStatus());
         }
         return reservation;
     }

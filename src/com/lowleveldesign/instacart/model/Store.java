@@ -1,5 +1,7 @@
 package com.lowleveldesign.instacart.model;
 
+import com.lowleveldesign.instacart.exception.InvalidStoreException;
+
 import java.util.Objects;
 
 /**
@@ -12,6 +14,12 @@ public class Store {
     private final String address;
 
     public Store(String storeId, String name, String address) {
+        if (storeId == null || storeId.trim().isEmpty()) {
+            throw new InvalidStoreException("Store id must not be null or blank");
+        }
+        if (name == null || name.trim().isEmpty()) {
+            throw new InvalidStoreException("Store name must not be null or blank");
+        }
         this.storeId = storeId;
         this.name = name;
         this.address = address;

@@ -1,5 +1,6 @@
 package com.lowleveldesign.instacart;
 
+import com.lowleveldesign.instacart.exception.InstacartException;
 import com.lowleveldesign.instacart.inventory.InventoryManager;
 import com.lowleveldesign.instacart.model.Product;
 import com.lowleveldesign.instacart.model.Store;
@@ -46,7 +47,7 @@ public class Main {
         try {
             orderService.placeOrder("cust-2", store.getStoreId(),
                     Arrays.asList(new OrderItem(milk.getProductId(), 100)));
-        } catch (RuntimeException e) {
+        } catch (InstacartException e) {
             System.out.println("\nExpected failure: " + e.getMessage());
         }
 

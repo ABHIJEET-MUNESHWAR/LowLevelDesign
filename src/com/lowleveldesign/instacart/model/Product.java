@@ -1,5 +1,7 @@
 package com.lowleveldesign.instacart.model;
 
+import com.lowleveldesign.instacart.exception.InvalidProductException;
+
 import java.util.Objects;
 
 /**
@@ -13,6 +15,15 @@ public class Product {
     private final double price;
 
     public Product(String productId, String name, String category, double price) {
+        if (productId == null || productId.trim().isEmpty()) {
+            throw new InvalidProductException("Product id must not be null or blank");
+        }
+        if (name == null || name.trim().isEmpty()) {
+            throw new InvalidProductException("Product name must not be null or blank");
+        }
+        if (price < 0) {
+            throw new InvalidProductException("Product price must not be negative: " + price);
+        }
         this.productId = productId;
         this.name = name;
         this.category = category;
