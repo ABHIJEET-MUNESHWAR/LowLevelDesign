@@ -12,14 +12,17 @@ public final class Booking {
     private final String id;
     private final String roomId;
     private final String roomName;
+    private final int roomCapacity;
     private final int attendeeCount;
     private final TimeSlot timeSlot;
     private final LocalDateTime bookedAt;
 
-    public Booking(String id, String roomId, String roomName, int attendeeCount, TimeSlot timeSlot) {
+    public Booking(String id, String roomId, String roomName, int roomCapacity, int attendeeCount,
+                   TimeSlot timeSlot) {
         this.id = id;
         this.roomId = roomId;
         this.roomName = roomName;
+        this.roomCapacity = roomCapacity;
         this.attendeeCount = attendeeCount;
         this.timeSlot = timeSlot;
         this.bookedAt = LocalDateTime.now();
@@ -37,6 +40,10 @@ public final class Booking {
         return roomName;
     }
 
+    public int getRoomCapacity() {
+        return roomCapacity;
+    }
+
     public int getAttendeeCount() {
         return attendeeCount;
     }
@@ -51,7 +58,7 @@ public final class Booking {
 
     @Override
     public String toString() {
-        return "Booking{id=" + id + ", room=" + roomName + ", attendees=" + attendeeCount
-                + ", slot=" + timeSlot + '}';
+        return "Booking{id=" + id + ", room=" + roomName + ", capacity=" + roomCapacity
+                + ", attendees=" + attendeeCount + ", slot=" + timeSlot + '}';
     }
 }

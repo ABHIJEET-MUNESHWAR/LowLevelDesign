@@ -60,6 +60,7 @@ public final class MeetingRoomBookingService implements BookingService {
             if (booking.isPresent()) {
                 Booking confirmed = booking.get();
                 bookingIdToRoomId.put(confirmed.getId(), confirmed.getRoomId());
+                printConfirmation(confirmed);
                 return confirmed.getId();
             }
             // This room is either too small or booked for an overlapping slot -- try the next
@@ -78,5 +79,23 @@ public final class MeetingRoomBookingService implements BookingService {
         }
         Room room = roomsById.get(roomId);
         return room != null && room.cancel(bookingId);
+    }
+
+    /**
+     * Emits the details of a confirmed booking.
+     *
+     * <p>Called after the room's lock has already been released, so console I/O never happens while
+     * holding a lock. The whole line is assembled into a single string before printing so that
+     * concurrent confirmations cannot interleave mid-line.
+     */
+    private void printConfirmation(Booking booking) {
+        String message = "Booking confirmed"
+                + " | Room: " + booking.getRoomName()
+                + " | Capacity: " + booking.getRoomCapacity()
+                + " | Attendees: " + booking.getAttendeeCount()
+                + " | Start: " + booking.getTimeSlot().getStart()
+                + " | End: " + booking.getTimeSlot().getEnd()
+                + " | Booking Id: " + booking.getId();
+        System.out.println(message);
     }
 }

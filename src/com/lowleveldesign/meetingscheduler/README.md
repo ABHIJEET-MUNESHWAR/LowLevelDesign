@@ -5,6 +5,15 @@ A single-host, thread-safe meeting room booking system. Given a desired capacity
 interval, confirms the reservation, and returns a booking ID. If no eligible room is free, it
 throws instead of silently degrading.
 
+Every confirmed booking is printed with its room name, room capacity, attendee count, and start
+and end time:
+
+```
+Booking confirmed | Room: Falcon (Small) | Capacity: 6 | Attendees: 4 | Start: 2026-01-05T10:00 | End: 2026-01-05T11:00 | Booking Id: a0562c7b-0940-457d-919f-883cd2eb95c0
+Booking confirmed | Room: Eagle (Medium) | Capacity: 12 | Attendees: 5 | Start: 2026-01-05T10:00 | End: 2026-01-05T11:00 | Booking Id: f4353c21-9e1c-4269-adb4-c8bafa4dedc8
+Booking confirmed | Room: Hawk (Large) | Capacity: 20 | Attendees: 16 | Start: 2026-01-05T10:30 | End: 2026-01-05T11:30 | Booking Id: d52f204b-f00b-43bb-b0f8-8d1f91045694
+```
+
 ## Table of Contents
 
 1. [Table of Contents](#table-of-contents)
@@ -45,9 +54,10 @@ meetingscheduler/
   ending at 10:00 does not conflict with one starting at 10:00. Validates `end > start` in its
   constructor so an invalid slot can never be constructed. `overlaps()` is the single source of
   truth for "do two intervals conflict."
-- **`Booking`** — an immutable receipt: ID, room ID/name, attendee count, the `TimeSlot`, and a
-  timestamp. Returned to the caller as proof of a confirmed reservation; never mutated after
-  creation.
+- **`Booking`** — an immutable receipt: ID, room ID/name, **room capacity**, attendee count, the
+  `TimeSlot`, and a timestamp. Returned to the caller as proof of a confirmed reservation; never
+  mutated after creation. Carrying the room capacity on the receipt makes it self-describing, so
+  the confirmation printout needs no lookup back into `Room`.
 - **`Room`** — the unit of concurrency control. Each `Room` owns a private `ReentrantLock` and a
   `TreeMap<LocalDateTime, Booking>` keyed by booking start time. All reads/writes of that map
   happen only while holding the room's own lock. Because a room's existing bookings are always
@@ -102,8 +112,11 @@ don't care (e.g., a batch job that just logs and moves on).
    - If free, it mints a new UUID, builds an immutable `Booking`, inserts it into the calendar, and
      returns it — all still inside the lock, so the check-then-act is atomic.
    - The lock is released.
-5. If a booking was returned, the service records `bookingId -> roomId` for later cancellation and
-   returns the booking ID to the caller.
+5. If a booking was returned, the service records `bookingId -> roomId` for later cancellation,
+   prints the confirmation (room name, room capacity, attendee count, start and end time), and
+   returns the booking ID to the caller. The print happens **after** the room's lock has been
+   released, and the whole line is assembled into a single string before being written, so console
+   I/O never occurs under a lock and concurrent confirmations cannot interleave mid-line.
 6. If the room was full or too small, the service moves to the **next best-fit candidate** (next
    smallest capacity) and repeats step 4.
 7. If every capacity-eligible room is exhausted with no success, `NoRoomAvailableException` is
@@ -170,6 +183,7 @@ classDiagram
         -bookingIdToRoomId Map~String, String~
         +bookRoom(attendeeCount int, start LocalDateTime, end LocalDateTime) String
         +cancelBooking(bookingId String) boolean
+        -printConfirmation(booking Booking) void
     }
 
     class Room {
@@ -195,6 +209,7 @@ classDiagram
         -id String
         -roomId String
         -roomName String
+        -roomCapacity int
         -attendeeCount int
         -timeSlot TimeSlot
         -bookedAt LocalDateTime
@@ -251,6 +266,7 @@ sequenceDiagram
     deactivate R2
 
     Svc->>Svc: bookingIdToRoomId.put(bookingId, R2.id)
+    Svc->>Svc: printConfirmation(booking) -- room name, capacity,<br/>attendees, start, end (lock already released)
     Svc-->>Client: bookingId
 ```
 
@@ -303,7 +319,8 @@ flowchart TD
     OverlapCheck -- No --> CreateBooking[Create Booking, insert into calendar]
     CreateBooking --> ReleaseLock2[Release lock]
     ReleaseLock2 --> Index[Record bookingId -> roomId]
-    Index --> Success[Return bookingId to caller]
+    Index --> Print[Print confirmation: room name, capacity,<br/>attendees, start, end]
+    Print --> Success[Return bookingId to caller]
     Success --> End3([End])
 ```
 

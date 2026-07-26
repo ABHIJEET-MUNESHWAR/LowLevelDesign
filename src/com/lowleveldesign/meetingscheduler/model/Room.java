@@ -63,7 +63,8 @@ public final class Room {
             if (hasOverlap(slot)) {
                 return Optional.empty();
             }
-            Booking booking = new Booking(UUID.randomUUID().toString(), id, name, attendeeCount, slot);
+            Booking booking = new Booking(UUID.randomUUID().toString(), id, name, capacity,
+                    attendeeCount, slot);
             bookings.put(slot.getStart(), booking);
             return Optional.of(booking);
         } finally {
