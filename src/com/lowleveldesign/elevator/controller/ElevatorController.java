@@ -65,7 +65,8 @@ public class ElevatorController {
     /** Internal destination call, e.g. a passenger pressing a floor button inside the cabin. */
     public void submitDestinationRequest(int elevatorId, int destinationFloor) {
         Elevator elevator = getElevator(elevatorId);
-        System.out.printf("Elevator %d received destination request for floor %d%n", elevatorId, destinationFloor);
+        Request request = Request.internalRequest(destinationFloor);
+        System.out.printf("Elevator %d received %s%n", elevatorId, request);
         elevator.addStop(destinationFloor);
     }
 

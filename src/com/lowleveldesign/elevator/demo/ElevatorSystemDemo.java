@@ -9,6 +9,7 @@ import com.lowleveldesign.elevator.controller.Building;
 import com.lowleveldesign.elevator.controller.ElevatorController;
 import com.lowleveldesign.elevator.model.Direction;
 import com.lowleveldesign.elevator.model.Elevator;
+import com.lowleveldesign.elevator.strategy.NearestElevatorStrategy;
 
 /**
  * Simple simulation demonstrating hall calls and destination calls being
@@ -18,12 +19,19 @@ public class ElevatorSystemDemo {
 
     public static void main(String[] args) {
         Building building = new Building(10, 2, 8); // 10 floors, 2 elevators, capacity 8
-        ElevatorController controller = building.getController();
+        System.out.printf("Building has %d floors%n", building.getNumberOfFloors());
+
+        // ElevatorController is a singleton; once Building has initialized it,
+        // any other component can fetch the same instance without needing a
+        // Building reference or re-supplying elevator count/capacity.
+        ElevatorController controller = ElevatorController.getInstance();
+        controller.setSchedulingStrategy(new NearestElevatorStrategy()); // pluggable dispatch algorithm
 
         // Passenger on floor 3 wants to go up; passenger on floor 8 wants to go down.
-        Elevator elevatorForFloor3 = controller.submitHallRequest(3, Direction.UP);
-        Elevator elevatorForFloor8 = controller.submitHallRequest(8, Direction.DOWN);
-        Elevator elevatorForFloor2 = controller.submitHallRequest(2, Direction.UP);
+        // Routed through Building so floor bounds are validated before dispatch.
+        Elevator elevatorForFloor3 = building.submitHallRequest(3, Direction.UP);
+        Elevator elevatorForFloor8 = building.submitHallRequest(8, Direction.DOWN);
+        Elevator elevatorForFloor2 = building.submitHallRequest(2, Direction.UP);
 
         // A destination can only be requested once the passenger has actually
         // boarded, i.e. once the assigned elevator opens its doors at their
@@ -31,17 +39,17 @@ public class ElevatorSystemDemo {
         // ordering instead of submitting the destination call up front.
         elevatorForFloor3.addListener((elevatorId, floor) -> {
             if (floor == 3) {
-                controller.submitDestinationRequest(elevatorId, 7);
+                building.submitDestinationRequest(elevatorId, 7);
             }
         });
         elevatorForFloor8.addListener((elevatorId, floor) -> {
             if (floor == 8) {
-                controller.submitDestinationRequest(elevatorId, 2);
+                building.submitDestinationRequest(elevatorId, 2);
             }
         });
         elevatorForFloor2.addListener((elevatorId, floor) -> {
             if (floor == 2) {
-                controller.submitDestinationRequest(elevatorId, 5);
+                building.submitDestinationRequest(elevatorId, 5);
             }
         });
 
@@ -53,7 +61,7 @@ public class ElevatorSystemDemo {
 
         System.out.println("\nSimulation complete in " + steps + " steps.");
         controller.getElevators().forEach(e ->
-                System.out.printf("Elevator %d final floor: %d, state: %s%n",
-                        e.getId(), e.getCurrentFloor(), e.getState()));
+                System.out.printf("Elevator %d final floor: %d, capacity: %d, state: %s%n",
+                        e.getId(), e.getCurrentFloor(), e.getCapacity(), e.getState()));
     }
 }

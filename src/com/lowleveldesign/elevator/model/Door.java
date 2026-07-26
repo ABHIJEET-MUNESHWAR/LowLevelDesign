@@ -21,8 +21,4 @@ public class Door {
         state = DoorState.CLOSED;
         System.out.println("  Door closed");
     }
-
-    public DoorState getState() {
-        return state;
-    }
 }

@@ -2,7 +2,6 @@ package com.lowleveldesign.elevator.strategy;
 
 import com.lowleveldesign.elevator.model.Direction;
 import com.lowleveldesign.elevator.model.Elevator;
-import com.lowleveldesign.elevator.model.ElevatorState;
 import com.lowleveldesign.elevator.model.Request;
 
 import java.util.List;
@@ -34,7 +33,7 @@ public class NearestElevatorStrategy implements SchedulingStrategy {
     private int computeCost(Elevator elevator, Request request) {
         int distance = elevator.distanceTo(request.getFloor());
 
-        if (elevator.getState() == ElevatorState.IDLE) {
+        if (elevator.isIdle()) {
             return distance;
         }
 
