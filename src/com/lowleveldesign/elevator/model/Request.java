@@ -1,5 +1,7 @@
 package com.lowleveldesign.elevator.model;
 
+import com.lowleveldesign.elevator.exception.InvalidRequestException;
+
 import java.util.Objects;
 
 /**
@@ -20,7 +22,7 @@ public class Request {
 
     public static Request externalRequest(int floor, Direction direction) {
         if (direction == Direction.IDLE) {
-            throw new IllegalArgumentException("Hall request must be UP or DOWN");
+            throw new InvalidRequestException("A hall request must specify direction UP or DOWN, but was IDLE");
         }
         return new Request(floor, direction, RequestType.EXTERNAL);
     }

@@ -11,6 +11,7 @@ LOOK/SCAN algorithm.
    - [model](#model)
    - [strategy](#strategy)
    - [controller](#controller)
+   - [exception](#exception)
    - [demo](#demo)
    - [test](#test)
 3. [Flow of the System](#flow-of-the-system)
@@ -20,8 +21,9 @@ LOOK/SCAN algorithm.
    - [Sequence Diagram](#sequence-diagram)
    - [Activity Diagram](#activity-diagram)
 5. [Design Patterns Used](#design-patterns-used)
-6. [Testing](#testing)
-7. [Extending the Design](#extending-the-design)
+6. [Exception Handling](#exception-handling)
+7. [Testing](#testing)
+8. [Extending the Design](#extending-the-design)
    - [More Scheduling Strategies](#more-scheduling-strategies)
    - [Multithreading](#multithreading)
    - [Concurrency](#concurrency)
@@ -46,8 +48,18 @@ com.lowleveldesign.elevator
 ├── controller
 │   ├── ElevatorController.java
 │   └── Building.java
-└── demo
-    └── ElevatorSystemDemo.java
+├── exception
+│   ├── ElevatorException.java
+│   ├── InvalidFloorException.java
+│   ├── InvalidRequestException.java
+│   ├── ElevatorNotFoundException.java
+│   ├── ControllerNotInitializedException.java
+│   ├── NoElevatorAvailableException.java
+│   └── InvalidBuildingConfigurationException.java
+├── demo
+│   └── ElevatorSystemDemo.java
+└── test
+    └── TestRunner.java
 ```
 
 ## Folder Details
@@ -88,6 +100,21 @@ exposes the public API a building's panels would call into.
 |---|---|
 | `ElevatorController` | Singleton. Owns the list of `Elevator`s, receives `submitHallRequest`/`submitDestinationRequest` calls, delegates elevator selection to the configured `SchedulingStrategy`, and advances all elevators each simulation tick via `stepAll()`. |
 | `Building` | Thin wrapper representing the building: validates floor bounds and lazily initializes the `ElevatorController` singleton with the elevator count/capacity. |
+
+### exception
+
+Contains the custom exception hierarchy. All failures extend a single base
+type so callers can catch broadly or narrowly as needed.
+
+| Class | Thrown when |
+|---|---|
+| `ElevatorException` | Base type (extends `RuntimeException`). Never thrown directly — lets callers `catch (ElevatorException e)` to handle any elevator failure uniformly. |
+| `InvalidFloorException` | A requested floor is outside the building's range (`< 0` or `>= numberOfFloors`). Carries the offending floor and the valid range in its message. |
+| `InvalidRequestException` | A request is malformed — notably a hall call raised with `Direction.IDLE`, which is meaningless. |
+| `ElevatorNotFoundException` | A destination request references an elevator id that doesn't exist in the bank. |
+| `ControllerNotInitializedException` | The no-arg `ElevatorController.getInstance()` is called before the singleton has been initialized with a count/capacity. |
+| `NoElevatorAvailableException` | The `SchedulingStrategy` returned no elevator (empty bank, all cars out of service, or out of zone). Prevents an opaque `NullPointerException` far from the real cause. |
+| `InvalidBuildingConfigurationException` | A `Building` is constructed with a non-positive floor count, elevator count, or capacity — fails fast at construction. |
 
 ### demo
 
@@ -308,7 +335,29 @@ classDiagram
         +main(args) void$
     }
 
+    class ElevatorException {
+        <<exception>>
+    }
+    class InvalidFloorException
+    class InvalidRequestException
+    class ElevatorNotFoundException
+    class ControllerNotInitializedException
+    class NoElevatorAvailableException
+    class InvalidBuildingConfigurationException
+
     SchedulingStrategy <|.. NearestElevatorStrategy : implements
+    ElevatorException <|-- InvalidFloorException
+    ElevatorException <|-- InvalidRequestException
+    ElevatorException <|-- ElevatorNotFoundException
+    ElevatorException <|-- ControllerNotInitializedException
+    ElevatorException <|-- NoElevatorAvailableException
+    ElevatorException <|-- InvalidBuildingConfigurationException
+    Request ..> InvalidRequestException : throws
+    Building ..> InvalidFloorException : throws
+    Building ..> InvalidBuildingConfigurationException : throws
+    ElevatorController ..> ElevatorNotFoundException : throws
+    ElevatorController ..> ControllerNotInitializedException : throws
+    ElevatorController ..> NoElevatorAvailableException : throws
     ElevatorListener <|.. ElevatorSystemDemo : implements (lambda)
     ElevatorController "1" o-- "many" Elevator : manages
     ElevatorController "1" --> "1" SchedulingStrategy : uses
@@ -423,10 +472,60 @@ flowchart TD
 | **Immutable Value Object** | `Request` | Once a request is created it never changes — floor, direction and type are `final`. Immutability makes requests safe to pass around, hash/compare (`equals`/`hashCode`), and reason about without defensive copying. |
 | **Observer** | `ElevatorListener` / `Elevator.addListener(...)` | A destination request is only physically valid *after* a passenger has boarded, which happens the moment the doors open at their pickup floor. `Elevator` notifies registered `ElevatorListener`s from `openDoorAt()`, letting callers react to that exact moment instead of guessing timing — this is what prevents a destination floor from being served before the corresponding pickup. |
 
+## Exception Handling
+
+All failures are represented by domain-specific exceptions in the
+[`exception`](#exception) package rather than generic JDK types, and all of
+them extend a single base class:
+
+```
+RuntimeException
+└── ElevatorException
+    ├── InvalidFloorException
+    ├── InvalidRequestException
+    ├── ElevatorNotFoundException
+    ├── ControllerNotInitializedException
+    ├── NoElevatorAvailableException
+    └── InvalidBuildingConfigurationException
+```
+
+**Where each is thrown:**
+
+| Site | Exception | Replaces |
+|---|---|---|
+| `Request.externalRequest(floor, IDLE)` | `InvalidRequestException` | `IllegalArgumentException` |
+| `Building.validateFloor(...)` — and therefore both `Building.submitHallRequest` / `submitDestinationRequest` | `InvalidFloorException` | `IllegalArgumentException` |
+| `Building` constructor (floors/elevators/capacity ≤ 0) | `InvalidBuildingConfigurationException` | *(previously unvalidated)* |
+| `ElevatorController.getInstance()` before init | `ControllerNotInitializedException` | `IllegalStateException` |
+| `ElevatorController.getElevator(unknownId)` | `ElevatorNotFoundException` | `IllegalArgumentException` |
+| `ElevatorController.submitHallRequest(...)` when the strategy selects nothing | `NoElevatorAvailableException` | *(previously an eventual `NullPointerException`)* |
+
+**Design rationale:**
+
+- **Domain-specific over generic** — `catch (InvalidFloorException e)` conveys
+  intent that `catch (IllegalArgumentException e)` cannot, and can't
+  accidentally catch an unrelated argument error thrown from deep inside a JDK
+  call.
+- **Common supertype** — a UI or API layer that simply wants to convert any
+  elevator failure into an error response can catch `ElevatorException` once
+  instead of enumerating six types. Verified by a dedicated test.
+- **Unchecked (`RuntimeException`)** — these represent programming/usage errors
+  and unsatisfiable requests, not recoverable I/O conditions, so forcing
+  `throws` clauses through every call site would add noise without value.
+  This also matches the existing convention in
+  `com.lowleveldesign.meetingscheduler.exception`.
+- **Messages built inside the exception** — e.g. `InvalidFloorException(floor,
+  numberOfFloors)` formats the valid range itself, so every throw site produces
+  a consistent, informative message instead of hand-rolled strings.
+- **Fail fast** — `InvalidBuildingConfigurationException` and
+  `NoElevatorAvailableException` were added specifically to surface problems at
+  their origin, rather than letting a zero-elevator building or a null strategy
+  result blow up later with an unhelpful stack trace.
+
 ## Testing
 
 `com.lowleveldesign.elevator.test.TestRunner` is a dependency-free unit test
-suite (29 tests) — no JUnit, Maven or Gradle required, matching the existing
+suite (32 tests) — no JUnit, Maven or Gradle required, matching the existing
 convention in this repository.
 
 **Run from the repository root:**
@@ -458,6 +557,7 @@ it can be dropped into CI as-is.
 | `NearestElevatorStrategy` | Prefers the closest idle elevator; prefers an elevator already travelling toward the request over a farther idle one; penalizes an elevator moving away/opposite. |
 | `ElevatorController` | No-arg `getInstance()` throws before initialization; the singleton returns the same shared instance (and ignores later constructor args); hall requests dispatch and return the chosen elevator; destination requests queue on the target elevator; unknown elevator id throws; `stepAll()` advances only busy elevators; `setSchedulingStrategy()` genuinely swaps the dispatch algorithm. |
 | `Building` | `validateFloor` rejects floors `< 0` and `>= numberOfFloors`; both `submitHallRequest` and `submitDestinationRequest` enforce those bounds before dispatching. |
+| Custom exceptions | The `Building` constructor rejects non-positive floors/elevators/capacity; `NoElevatorAvailableException` is raised when a strategy selects nothing; every failure is catchable via the shared `ElevatorException` supertype and is unchecked. |
 
 > **Note on testing a Singleton:** because `ElevatorController` caches a
 > private static `instance`, each test needs a clean slate. Rather than adding

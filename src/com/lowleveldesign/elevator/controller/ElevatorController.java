@@ -1,5 +1,8 @@
 package com.lowleveldesign.elevator.controller;
 
+import com.lowleveldesign.elevator.exception.ControllerNotInitializedException;
+import com.lowleveldesign.elevator.exception.ElevatorNotFoundException;
+import com.lowleveldesign.elevator.exception.NoElevatorAvailableException;
 import com.lowleveldesign.elevator.model.Direction;
 import com.lowleveldesign.elevator.model.Elevator;
 import com.lowleveldesign.elevator.model.Request;
@@ -38,7 +41,7 @@ public class ElevatorController {
 
     public static synchronized ElevatorController getInstance() {
         if (instance == null) {
-            throw new IllegalStateException("ElevatorController not initialized. Call getInstance(int, int) first.");
+            throw new ControllerNotInitializedException();
         }
         return instance;
     }
@@ -57,6 +60,9 @@ public class ElevatorController {
     public Elevator submitHallRequest(int floor, Direction direction) {
         Request request = Request.externalRequest(floor, direction);
         Elevator chosen = schedulingStrategy.selectElevator(elevators, request);
+        if (chosen == null) {
+            throw new NoElevatorAvailableException("No elevator could be assigned to serve " + request);
+        }
         System.out.printf("Dispatching hall call %s -> Elevator %d%n", request, chosen.getId());
         chosen.addStop(floor);
         return chosen;
@@ -74,7 +80,7 @@ public class ElevatorController {
         return elevators.stream()
                 .filter(e -> e.getId() == elevatorId)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No elevator with id " + elevatorId));
+                .orElseThrow(() -> new ElevatorNotFoundException(elevatorId));
     }
 
     public List<Elevator> getElevators() {

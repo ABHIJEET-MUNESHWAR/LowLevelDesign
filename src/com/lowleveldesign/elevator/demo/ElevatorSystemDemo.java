@@ -31,7 +31,6 @@ public class ElevatorSystemDemo {
         // Routed through Building so floor bounds are validated before dispatch.
         Elevator elevatorForFloor3 = building.submitHallRequest(3, Direction.UP);
         Elevator elevatorForFloor8 = building.submitHallRequest(8, Direction.DOWN);
-        Elevator elevatorForFloor2 = building.submitHallRequest(2, Direction.UP);
 
         // A destination can only be requested once the passenger has actually
         // boarded, i.e. once the assigned elevator opens its doors at their
@@ -45,11 +44,6 @@ public class ElevatorSystemDemo {
         elevatorForFloor8.addListener((elevatorId, floor) -> {
             if (floor == 8) {
                 building.submitDestinationRequest(elevatorId, 2);
-            }
-        });
-        elevatorForFloor2.addListener((elevatorId, floor) -> {
-            if (floor == 2) {
-                building.submitDestinationRequest(elevatorId, 5);
             }
         });
 

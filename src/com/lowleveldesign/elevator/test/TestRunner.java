@@ -2,6 +2,13 @@ package com.lowleveldesign.elevator.test;
 
 import com.lowleveldesign.elevator.controller.Building;
 import com.lowleveldesign.elevator.controller.ElevatorController;
+import com.lowleveldesign.elevator.exception.ControllerNotInitializedException;
+import com.lowleveldesign.elevator.exception.ElevatorException;
+import com.lowleveldesign.elevator.exception.ElevatorNotFoundException;
+import com.lowleveldesign.elevator.exception.InvalidBuildingConfigurationException;
+import com.lowleveldesign.elevator.exception.InvalidFloorException;
+import com.lowleveldesign.elevator.exception.InvalidRequestException;
+import com.lowleveldesign.elevator.exception.NoElevatorAvailableException;
 import com.lowleveldesign.elevator.model.Direction;
 import com.lowleveldesign.elevator.model.Door;
 import com.lowleveldesign.elevator.model.Display;
@@ -70,6 +77,11 @@ public final class TestRunner {
         run("Building.submitHallRequest rejects out-of-range floor", TestRunner::testBuildingSubmitHallRequestValidates);
         run("Building.submitDestinationRequest rejects out-of-range floor", TestRunner::testBuildingSubmitDestinationRequestValidates);
 
+        // --- Custom exceptions ---
+        run("Building constructor rejects invalid configuration", TestRunner::testBuildingRejectsInvalidConfiguration);
+        run("NoElevatorAvailableException when strategy selects no elevator", TestRunner::testNoElevatorAvailableWhenStrategyDeclines);
+        run("all elevator exceptions share the ElevatorException supertype", TestRunner::testAllExceptionsShareCommonSupertype);
+
         System.out.println("\n" + passed + " passed, " + failed + " failed");
         if (failed > 0) {
             System.exit(1);
@@ -117,8 +129,8 @@ public final class TestRunner {
     private static Void testExternalRequestRejectsIdle() {
         try {
             Request.externalRequest(5, Direction.IDLE);
-            throw new AssertionError("Expected IllegalArgumentException for IDLE hall request");
-        } catch (IllegalArgumentException expected) {
+            throw new AssertionError("Expected InvalidRequestException for IDLE hall request");
+        } catch (InvalidRequestException expected) {
             // expected
         }
         return null;
@@ -383,8 +395,8 @@ public final class TestRunner {
     private static Void testGetInstanceBeforeInitThrows() {
         try {
             ElevatorController.getInstance();
-            throw new AssertionError("Expected IllegalStateException before any getInstance(count, capacity) call");
-        } catch (IllegalStateException expected) {
+            throw new AssertionError("Expected ControllerNotInitializedException before any getInstance(count, capacity) call");
+        } catch (ControllerNotInitializedException expected) {
             // expected
         }
         return null;
@@ -420,8 +432,8 @@ public final class TestRunner {
         ElevatorController controller = ElevatorController.getInstance(2, 8);
         try {
             controller.submitDestinationRequest(99, 4);
-            throw new AssertionError("Expected IllegalArgumentException for an unknown elevator id");
-        } catch (IllegalArgumentException expected) {
+            throw new AssertionError("Expected ElevatorNotFoundException for an unknown elevator id");
+        } catch (ElevatorNotFoundException expected) {
             // expected
         }
         return null;
@@ -461,14 +473,14 @@ public final class TestRunner {
         Building building = new Building(10, 1, 4);
         try {
             building.validateFloor(10); // valid range is [0, 9]
-            throw new AssertionError("Expected IllegalArgumentException for floor at/above numberOfFloors");
-        } catch (IllegalArgumentException expected) {
+            throw new AssertionError("Expected InvalidFloorException for floor at/above numberOfFloors");
+        } catch (InvalidFloorException expected) {
             // expected
         }
         try {
             building.validateFloor(-1);
-            throw new AssertionError("Expected IllegalArgumentException for a negative floor");
-        } catch (IllegalArgumentException expected) {
+            throw new AssertionError("Expected InvalidFloorException for a negative floor");
+        } catch (InvalidFloorException expected) {
             // expected
         }
         return null;
@@ -478,8 +490,8 @@ public final class TestRunner {
         Building building = new Building(10, 1, 4);
         try {
             building.submitHallRequest(15, Direction.UP);
-            throw new AssertionError("Expected IllegalArgumentException for an out-of-range hall request");
-        } catch (IllegalArgumentException expected) {
+            throw new AssertionError("Expected InvalidFloorException for an out-of-range hall request");
+        } catch (InvalidFloorException expected) {
             // expected
         }
         return null;
@@ -489,10 +501,69 @@ public final class TestRunner {
         Building building = new Building(10, 1, 4);
         try {
             building.submitDestinationRequest(1, -5);
-            throw new AssertionError("Expected IllegalArgumentException for an out-of-range destination");
-        } catch (IllegalArgumentException expected) {
+            throw new AssertionError("Expected InvalidFloorException for an out-of-range destination");
+        } catch (InvalidFloorException expected) {
             // expected
         }
+        return null;
+    }
+
+    // ---------------------------------------------------------------- Exceptions
+
+    private static Void testBuildingRejectsInvalidConfiguration() {
+        try {
+            new Building(0, 2, 8);
+            throw new AssertionError("Expected InvalidBuildingConfigurationException for zero floors");
+        } catch (InvalidBuildingConfigurationException expected) {
+            // expected
+        }
+        try {
+            new Building(10, 0, 8);
+            throw new AssertionError("Expected InvalidBuildingConfigurationException for zero elevators");
+        } catch (InvalidBuildingConfigurationException expected) {
+            // expected
+        }
+        try {
+            new Building(10, 2, -1);
+            throw new AssertionError("Expected InvalidBuildingConfigurationException for negative capacity");
+        } catch (InvalidBuildingConfigurationException expected) {
+            // expected
+        }
+        return null;
+    }
+
+    private static Void testNoElevatorAvailableWhenStrategyDeclines() {
+        ElevatorController controller = ElevatorController.getInstance(2, 8);
+        controller.setSchedulingStrategy((elevators, request) -> null); // e.g. all cars out of service
+        try {
+            controller.submitHallRequest(4, Direction.UP);
+            throw new AssertionError("Expected NoElevatorAvailableException when the strategy selects nothing");
+        } catch (NoElevatorAvailableException expected) {
+            // expected
+        }
+        return null;
+    }
+
+    /**
+     * All elevator failures share a common supertype, so callers that don't
+     * care about the specific cause can catch just ElevatorException.
+     */
+    private static Void testAllExceptionsShareCommonSupertype() {
+        Building building = new Building(10, 1, 4);
+        try {
+            building.validateFloor(99);
+            throw new AssertionError("Expected an ElevatorException subtype");
+        } catch (ElevatorException expected) {
+            // expected - InvalidFloorException is an ElevatorException
+        }
+        try {
+            Request.externalRequest(1, Direction.IDLE);
+            throw new AssertionError("Expected an ElevatorException subtype");
+        } catch (ElevatorException expected) {
+            // expected - InvalidRequestException is an ElevatorException
+        }
+        assertTrue(new ElevatorException("x") instanceof RuntimeException,
+                "ElevatorException should be unchecked so the API stays uncluttered");
         return null;
     }
 }
