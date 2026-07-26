@@ -104,10 +104,18 @@ exposes the public API a building's panels would call into.
    `EXTERNAL` `Request` and asks the `SchedulingStrategy` to pick the best
    `Elevator`. The chosen elevator adds the floor to its `upStops`/`downStops`
    queue via `addStop()`, and its `direction` flips from `IDLE` if needed.
-3. **Destination call** — Once inside, a passenger presses a floor button →
-   `ElevatorController.submitDestinationRequest(elevatorId, floor)` creates an
-   `INTERNAL` `Request` and adds it directly to that elevator's stop queue
-   (no scheduling decision needed — the cabin is fixed).
+3. **Destination call (temporally gated)** — A passenger's destination button
+   press must only be honored *after* they've actually boarded, i.e. after the
+   elevator opens its doors at their pickup floor — never before. Rather than
+   the caller submitting the destination request eagerly, `Elevator` exposes
+   `addListener(ElevatorListener)` (Observer pattern) and notifies listeners
+   from `openDoorAt()` once the doors have opened. Callers (e.g. the demo,
+   standing in for a passenger) register a listener on the specific elevator
+   returned by `submitHallRequest(...)`, and only call
+   `ElevatorController.submitDestinationRequest(elevatorId, floor)` once
+   notified — this creates an `INTERNAL` `Request` and adds it directly to
+   that elevator's stop queue (no scheduling decision needed, since the cabin
+   is already fixed).
 4. **Movement (LOOK/SCAN)** — Each simulation tick, `ElevatorController.stepAll()`
    calls `Elevator.step()` on every busy elevator. An elevator moving `UP`
    keeps incrementing its floor and serving every stop in `upStops` before
@@ -125,8 +133,20 @@ Passenger → Building → ElevatorController → SchedulingStrategy → Elevato
                                                                         │
                                                               ElevatorController.stepAll()
                                                                         │
-                                                              Elevator.step() (LOOK) → Door open/close → Display
+                                                    Elevator.step() (LOOK) → Door open/close → notify ElevatorListener(s)
+                                                                        │
+                                                          (passenger boards) → submitDestinationRequest() → Elevator.addStop()
 ```
+
+> **Why the ordering matters:** without gating destination requests behind an
+> arrival callback, a naive simulation could submit a destination call for a
+> floor that is numerically *between* the elevator's current position and the
+> passenger's pickup floor. Since `Elevator.addStop()` only compares floor
+> numbers, that destination would be queued and served *before* the elevator
+> ever reaches the pickup floor — i.e. dropping off a passenger who hasn't
+> boarded yet. The `ElevatorListener` callback closes this gap by ensuring a
+> destination can only be raised once the corresponding pickup has actually
+> been served.
 
 ## Diagrams
 
@@ -236,10 +256,17 @@ classDiagram
         -Display display
         -TreeSet~Integer~ upStops
         -TreeSet~Integer~ downStops
+        -List~ElevatorListener~ listeners
         +addStop(floor) void
+        +addListener(listener) void
         +step() void
         +distanceTo(floor) int
         +hasPendingRequests() bool
+    }
+
+    class ElevatorListener {
+        <<interface>>
+        +onDoorOpened(elevatorId, floor) void
     }
 
     class SchedulingStrategy {
@@ -257,7 +284,7 @@ classDiagram
         -SchedulingStrategy schedulingStrategy
         -ElevatorController instance$
         +getInstance(count, capacity)$ ElevatorController
-        +submitHallRequest(floor, direction) void
+        +submitHallRequest(floor, direction) Elevator
         +submitDestinationRequest(elevatorId, floor) void
         +stepAll() void
         +anyElevatorBusy() bool
@@ -274,11 +301,13 @@ classDiagram
     }
 
     SchedulingStrategy <|.. NearestElevatorStrategy : implements
+    ElevatorListener <|.. ElevatorSystemDemo : implements (lambda)
     ElevatorController "1" o-- "many" Elevator : manages
     ElevatorController "1" --> "1" SchedulingStrategy : uses
     Building "1" --> "1" ElevatorController : owns
     Elevator "1" *-- "1" Door : has
     Elevator "1" *-- "1" Display : has
+    Elevator "1" o-- "many" ElevatorListener : notifies
     Elevator --> ElevatorState : has state
     Elevator --> Direction : has direction
     Door --> DoorState : has state
@@ -293,7 +322,8 @@ classDiagram
 
 ### Sequence Diagram
 
-Hall call followed by a destination call, through to elevator arrival:
+Hall call, followed by a destination call that is correctly gated until
+*after* boarding (via `ElevatorListener`), through to elevator arrival:
 
 ```mermaid
 sequenceDiagram
@@ -310,9 +340,9 @@ sequenceDiagram
     SS-->>EC: bestElevator
     EC->>E: addStop(3)
     Note over E: upStops/downStops updated,<br/>direction set if IDLE
-
-    P->>EC: submitDestinationRequest(elevatorId, 7)
-    EC->>E: addStop(7)
+    EC-->>P: return bestElevator
+    P->>E: addListener(onDoorOpened)
+    Note over P,E: Passenger registers to be notified<br/>only once they've actually boarded
 
     loop until all elevators idle
         EC->>E: step()
@@ -323,6 +353,10 @@ sequenceDiagram
             D-->>E: OPEN
             E->>D: close()
             D-->>E: CLOSED
+            E->>P: onDoorOpened(elevatorId, floor=3)
+            Note over P: Only now - after boarding -<br/>can a destination be requested
+            P->>EC: submitDestinationRequest(elevatorId, 7)
+            EC->>E: addStop(7)
             E->>E: state = MOVING or IDLE
         end
     end
@@ -379,6 +413,7 @@ flowchart TD
 | **Facade** | `ElevatorController` | Hides the complexity of elevator selection, stop-queue management, and stepping behind two simple entry points (`submitHallRequest`, `submitDestinationRequest`) that callers (hall panels, cabin panels, the demo) use without knowing internal scheduling details. |
 | **State (implicit, via enums)** | `ElevatorState`, `DoorState`, `Direction` | Rather than a full State pattern with polymorphic classes, lightweight enums represent the finite states of an elevator/door. This keeps the object graph simple while still making illegal states (e.g. "moving" with no direction) easy to guard against, appropriate since transition logic is small and centralized in `Elevator`. |
 | **Immutable Value Object** | `Request` | Once a request is created it never changes — floor, direction and type are `final`. Immutability makes requests safe to pass around, hash/compare (`equals`/`hashCode`), and reason about without defensive copying. |
+| **Observer** | `ElevatorListener` / `Elevator.addListener(...)` | A destination request is only physically valid *after* a passenger has boarded, which happens the moment the doors open at their pickup floor. `Elevator` notifies registered `ElevatorListener`s from `openDoorAt()`, letting callers react to that exact moment instead of guessing timing — this is what prevents a destination floor from being served before the corresponding pickup. |
 
 ## Extending the Design
 

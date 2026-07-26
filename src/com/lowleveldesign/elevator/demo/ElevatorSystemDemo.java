@@ -8,6 +8,7 @@ package com.lowleveldesign.elevator.demo;
 import com.lowleveldesign.elevator.controller.Building;
 import com.lowleveldesign.elevator.controller.ElevatorController;
 import com.lowleveldesign.elevator.model.Direction;
+import com.lowleveldesign.elevator.model.Elevator;
 
 /**
  * Simple simulation demonstrating hall calls and destination calls being
@@ -20,12 +21,29 @@ public class ElevatorSystemDemo {
         ElevatorController controller = building.getController();
 
         // Passenger on floor 3 wants to go up; passenger on floor 8 wants to go down.
-        controller.submitHallRequest(3, Direction.UP);
-        controller.submitHallRequest(8, Direction.DOWN);
+        Elevator elevatorForFloor3 = controller.submitHallRequest(3, Direction.UP);
+        Elevator elevatorForFloor8 = controller.submitHallRequest(8, Direction.DOWN);
+        Elevator elevatorForFloor2 = controller.submitHallRequest(2, Direction.UP);
 
-        // Once picked up, passengers choose their destination floors.
-        controller.submitDestinationRequest(1, 7);
-        controller.submitDestinationRequest(2, 2);
+        // A destination can only be requested once the passenger has actually
+        // boarded, i.e. once the assigned elevator opens its doors at their
+        // pickup floor - never before. Registering a listener enforces that
+        // ordering instead of submitting the destination call up front.
+        elevatorForFloor3.addListener((elevatorId, floor) -> {
+            if (floor == 3) {
+                controller.submitDestinationRequest(elevatorId, 7);
+            }
+        });
+        elevatorForFloor8.addListener((elevatorId, floor) -> {
+            if (floor == 8) {
+                controller.submitDestinationRequest(elevatorId, 2);
+            }
+        });
+        elevatorForFloor2.addListener((elevatorId, floor) -> {
+            if (floor == 2) {
+                controller.submitDestinationRequest(elevatorId, 5);
+            }
+        });
 
         int steps = 0;
         while (controller.anyElevatorBusy() && steps < 50) {

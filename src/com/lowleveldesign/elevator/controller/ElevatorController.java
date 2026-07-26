@@ -47,12 +47,19 @@ public class ElevatorController {
         this.schedulingStrategy = strategy;
     }
 
-    /** External hall call, e.g. a passenger pressing UP/DOWN on a floor. */
-    public void submitHallRequest(int floor, Direction direction) {
+    /**
+     * External hall call, e.g. a passenger pressing UP/DOWN on a floor.
+     * Returns the elevator chosen to serve it, so callers can (for example)
+     * register an {@link com.lowleveldesign.elevator.model.ElevatorListener}
+     * to raise a destination request only once that elevator actually opens
+     * its doors at the pickup floor.
+     */
+    public Elevator submitHallRequest(int floor, Direction direction) {
         Request request = Request.externalRequest(floor, direction);
         Elevator chosen = schedulingStrategy.selectElevator(elevators, request);
         System.out.printf("Dispatching hall call %s -> Elevator %d%n", request, chosen.getId());
         chosen.addStop(floor);
+        return chosen;
     }
 
     /** Internal destination call, e.g. a passenger pressing a floor button inside the cabin. */
