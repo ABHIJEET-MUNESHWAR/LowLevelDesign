@@ -8,6 +8,11 @@ package com.lowleveldesign.instacart.exception;
  * this common base.
  */
 public abstract class InstacartException extends RuntimeException {
+    /**
+     * Creates the exception with a human-readable description of the domain failure.
+     *
+     * @param message the failure description
+     */
     protected InstacartException(String message) {
         super(message);
     }

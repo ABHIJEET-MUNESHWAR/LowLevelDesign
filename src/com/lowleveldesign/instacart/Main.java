@@ -13,6 +13,13 @@ import java.util.Arrays;
 
 /** End-to-end demo of the inventory management system. */
 public class Main {
+    /**
+     * Runs an end-to-end walkthrough of the inventory system: stocks two products, places and
+     * checks out an order (showing reservation, low-stock alerting, and confirmation), then
+     * demonstrates atomic rollback when an order requests more stock than is available.
+     *
+     * @param args ignored
+     */
     public static void main(String[] args) {
         InventoryManager inventoryManager = InventoryManager.getInstance();
         inventoryManager.registerObserver(new LowStockNotifier());
