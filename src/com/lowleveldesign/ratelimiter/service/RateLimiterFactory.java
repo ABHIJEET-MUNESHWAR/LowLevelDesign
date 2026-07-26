@@ -1,5 +1,6 @@
 package com.lowleveldesign.ratelimiter.service;
 
+import com.lowleveldesign.ratelimiter.exception.UnknownRateLimiterTypeException;
 import com.lowleveldesign.ratelimiter.model.RateLimiterConfig;
 import com.lowleveldesign.ratelimiter.model.Ticker;
 
@@ -30,7 +31,7 @@ public final class RateLimiterFactory {
             case SLIDING_WINDOW_COUNTER:
                 return new SlidingWindowCounterRateLimiter(config, ticker);
             default:
-                throw new IllegalArgumentException("Unknown rate limiter type: " + type);
+                throw new UnknownRateLimiterTypeException("Unknown rate limiter type: " + type);
         }
     }
 }

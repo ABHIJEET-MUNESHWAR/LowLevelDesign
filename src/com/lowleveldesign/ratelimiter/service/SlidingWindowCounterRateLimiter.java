@@ -1,5 +1,6 @@
 package com.lowleveldesign.ratelimiter.service;
 
+import com.lowleveldesign.ratelimiter.exception.InvalidRateLimitRequestException;
 import com.lowleveldesign.ratelimiter.model.RateLimitResult;
 import com.lowleveldesign.ratelimiter.model.RateLimiterConfig;
 import com.lowleveldesign.ratelimiter.model.Ticker;
@@ -50,7 +51,7 @@ public final class SlidingWindowCounterRateLimiter implements RateLimiter {
     @Override
     public RateLimitResult tryAcquireDetailed(String clientId, int permits) {
         if (permits <= 0) {
-            throw new IllegalArgumentException("permits must be > 0");
+            throw new InvalidRateLimitRequestException("permits must be > 0, got " + permits);
         }
         WindowState state = states.computeIfAbsent(clientId, id -> new WindowState());
         long windowNanos = config.windowNanos();

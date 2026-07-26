@@ -1,5 +1,8 @@
 package com.lowleveldesign.ratelimiter.test;
 
+import com.lowleveldesign.ratelimiter.exception.InvalidRateLimitRequestException;
+import com.lowleveldesign.ratelimiter.exception.InvalidRateLimiterConfigException;
+import com.lowleveldesign.ratelimiter.exception.UnsupportedRateLimiterOperationException;
 import com.lowleveldesign.ratelimiter.model.RateLimitResult;
 import com.lowleveldesign.ratelimiter.model.RateLimiterConfig;
 import com.lowleveldesign.ratelimiter.model.Ticker;
@@ -32,6 +35,7 @@ public final class TestRunner {
         testSlidingWindowLogRetryAfterMatchesOldestEntry();
         testSlidingWindowCounterSmoothsBoundaryBurst();
         testPerClientIsolation();
+        testCustomExceptionsAreThrown();
         testConcurrentRaceGrantsExactlyCapacityPermits();
 
         System.out.println();
@@ -140,6 +144,22 @@ public final class TestRunner {
         assertFalse("client X is now exhausted", limiter.tryAcquire("clientX"));
     }
 
+    private static void testCustomExceptionsAreThrown() {
+        assertThrows("non-positive permits config rejected", InvalidRateLimiterConfigException.class,
+                () -> RateLimiterConfig.of(0, Duration.ofSeconds(1)));
+        assertThrows("zero window config rejected", InvalidRateLimiterConfigException.class,
+                () -> RateLimiterConfig.of(1, Duration.ZERO));
+
+        RateLimiterConfig config = RateLimiterConfig.of(5, Duration.ofSeconds(1));
+        RateLimiter tokenBucket = RateLimiterFactory.create(RateLimiterType.TOKEN_BUCKET, config, new FakeTicker());
+        assertThrows("non-positive permits request rejected", InvalidRateLimitRequestException.class,
+                () -> tokenBucket.tryAcquire("c", 0));
+
+        RateLimiter log = RateLimiterFactory.create(RateLimiterType.SLIDING_WINDOW_LOG, config, new FakeTicker());
+        assertThrows("multi-permit on sliding window log rejected",
+                UnsupportedRateLimiterOperationException.class, () -> log.tryAcquire("c", 2));
+    }
+
     private static void testConcurrentRaceGrantsExactlyCapacityPermits() throws InterruptedException {
         RateLimiterConfig config = RateLimiterConfig.of(10, Duration.ofSeconds(60));
         RateLimiter limiter = RateLimiterFactory.create(RateLimiterType.TOKEN_BUCKET, config);
@@ -181,6 +201,17 @@ public final class TestRunner {
     private static void assertEquals(String label, long expected, long actual) {
         boolean ok = expected == actual;
         report(label + " (expected=" + expected + ", actual=" + actual + ")", ok);
+    }
+
+    private static void assertThrows(String label, Class<? extends Throwable> expected, Runnable action) {
+        try {
+            action.run();
+            report(label + " (expected " + expected.getSimpleName() + ", but nothing was thrown)", false);
+        } catch (Throwable actual) {
+            boolean ok = expected.isInstance(actual);
+            report(label + " (expected " + expected.getSimpleName() + ", got "
+                    + actual.getClass().getSimpleName() + ")", ok);
+        }
     }
 
     private static void report(String label, boolean ok) {

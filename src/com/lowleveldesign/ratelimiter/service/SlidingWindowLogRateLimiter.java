@@ -1,5 +1,7 @@
 package com.lowleveldesign.ratelimiter.service;
 
+import com.lowleveldesign.ratelimiter.exception.InvalidRateLimitRequestException;
+import com.lowleveldesign.ratelimiter.exception.UnsupportedRateLimiterOperationException;
 import com.lowleveldesign.ratelimiter.model.RateLimitResult;
 import com.lowleveldesign.ratelimiter.model.RateLimiterConfig;
 import com.lowleveldesign.ratelimiter.model.Ticker;
@@ -38,12 +40,12 @@ public final class SlidingWindowLogRateLimiter implements RateLimiter {
     @Override
     public RateLimitResult tryAcquireDetailed(String clientId, int permits) {
         if (permits <= 0) {
-            throw new IllegalArgumentException("permits must be > 0");
+            throw new InvalidRateLimitRequestException("permits must be > 0, got " + permits);
         }
         // Only single-permit requests make sense for an exact per-request log.
         if (permits != 1) {
-            throw new UnsupportedOperationException(
-                    "SlidingWindowLogRateLimiter only supports acquiring 1 permit at a time");
+            throw new UnsupportedRateLimiterOperationException(
+                    "SlidingWindowLogRateLimiter only supports acquiring 1 permit at a time, got " + permits);
         }
         ArrayDeque<Long> log = logs.computeIfAbsent(clientId, id -> new ArrayDeque<>());
         long now = ticker.nanoTime();

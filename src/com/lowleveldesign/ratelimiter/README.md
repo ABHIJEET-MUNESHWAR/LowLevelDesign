@@ -28,8 +28,14 @@ ratelimiter/
 ├── RateLimiterDemo.java            Runnable worked example (main)
 ├── model/
 │   ├── RateLimiterConfig.java      Immutable "permits per window" policy
-│   ├── RateLimitResult.java        allowed + remaining + retryAfterMillis (record)
+│   ├── RateLimitResult.java        allowed + remaining + retryAfterMillis (immutable value)
 │   └── Ticker.java                 Pluggable time source (system clock / fake clock for tests)
+├── exception/
+│   ├── RateLimiterException.java                        Abstract unchecked base type
+│   ├── InvalidRateLimiterConfigException.java           Bad policy (permits <= 0, non-positive window)
+│   ├── InvalidRateLimitRequestException.java            Bad tryAcquire argument (permits <= 0)
+│   ├── UnsupportedRateLimiterOperationException.java    Unsupported op (multi-permit sliding-window-log)
+│   └── UnknownRateLimiterTypeException.java             Factory asked for an unmapped type
 ├── service/
 │   ├── RateLimiter.java                        Facade interface (tryAcquire / tryAcquireDetailed)
 │   ├── RateLimiterType.java                    Enum of supported algorithms
@@ -46,12 +52,28 @@ ratelimiter/
 - **`RateLimiterConfig`** — immutable policy: `permits` and `window` (a `Duration`). Every
   algorithm reads the same two numbers; token bucket additionally derives capacity = `permits`
   and refill rate = `permits/window` from it (`nanosPerPermit()`).
-- **`RateLimitResult`** — a record capturing `allowed`, `remainingPermits`, and
+- **`RateLimitResult`** — an immutable value object capturing `allowed`, `remainingPermits`, and
   `retryAfterMillis`, mirroring real-world `X-RateLimit-Remaining` / `Retry-After` response
   headers so a web layer can populate them directly.
 - **`Ticker`** — a one-method functional interface (`nanoTime()`). Production code uses
   `Ticker.systemTicker()`; tests inject a fake, manually-advanced ticker so window/refill
   boundaries can be asserted exactly instead of relying on `Thread.sleep`.
+
+### `exception`
+All extend an abstract `RateLimiterException` (itself a `RuntimeException`), so callers can catch
+the whole family with one `catch (RateLimiterException e)` or handle each specifically. They are
+unchecked because every one signals a **programming/configuration mistake** the caller should fix,
+not a runtime condition to recover from — importantly, *being throttled is **not** an exception*;
+it is reported via `RateLimitResult.allowed() == false`.
+- **`InvalidRateLimiterConfigException`** — thrown by `RateLimiterConfig.of(...)` for a
+  non-positive permit count or a null/zero/negative window, so an impossible policy can never
+  reach an algorithm.
+- **`InvalidRateLimitRequestException`** — thrown by every algorithm when `tryAcquire` is called
+  with a non-positive `permits` argument.
+- **`UnsupportedRateLimiterOperationException`** — thrown by `SlidingWindowLogRateLimiter` when
+  asked for more than one permit at a time, an operation its exact per-request log doesn't define.
+- **`UnknownRateLimiterTypeException`** — thrown by `RateLimiterFactory` for a `RateLimiterType`
+  with no matching branch, so adding an enum constant without a factory case fails loudly.
 
 ### `service`
 - **`RateLimiter`** — the public contract: `tryAcquire(clientId[, permits])` and
@@ -271,6 +293,7 @@ flowchart TD
 | `RateLimiterConfig`, `RateLimitResult` | **Immutable Value Object** | Both are fully constructed (and validated) up front with no setters, so they can be freely shared across threads without extra synchronization. |
 | `Ticker` | **Dependency Injection / Strategy** | Decouples every algorithm from `System.nanoTime()`, letting tests substitute a deterministic fake clock instead of sleeping and hoping timing works out. |
 | `tryAcquireDetailed` returning `RateLimitResult` rather than throwing | **Special Case (via a result object)** | "Rate limited" is an expected, frequent outcome, not an error — returning a result object avoids exceptions-as-control-flow and gives callers the data needed for `Retry-After` headers. |
+| `RateLimiterException` + its four subtypes | **Domain-Specific Exception (Unchecked)** | Misuse (bad policy, bad argument, unsupported op, unknown type) throws a named type instead of a generic `IllegalArgumentException`, so callers can `catch` the whole family via the shared base or handle each precisely; all unchecked because they signal caller mistakes, not recoverable business conditions. |
 | `ConcurrentHashMap<String, State>` in every implementation | **(Lightweight) Repository** | O(1) average lookup/creation of per-client state without a separate registration step or a global lock guarding the whole map. |
 
 ---

@@ -20,6 +20,12 @@
  *                          {@code SlidingWindowLogRateLimiter},
  *                          {@code SlidingWindowCounterRateLimiter}), {@code RateLimiterType}, and
  *                          {@code RateLimiterFactory} to construct any of them by type.</li>
+ *   <li>{@code exception} -- a {@code RateLimiterException} base type and its unchecked subtypes
+ *                          ({@code InvalidRateLimiterConfigException},
+ *                          {@code InvalidRateLimitRequestException},
+ *                          {@code UnsupportedRateLimiterOperationException},
+ *                          {@code UnknownRateLimiterTypeException}) so misuse fails with a
+ *                          domain-specific type rather than a generic {@code IllegalArgumentException}.</li>
  *   <li>{@code test}    -- dependency-free correctness and concurrency tests
  *                          ({@code TestRunner}) driven by a fake {@code Ticker}.</li>
  * </ul>

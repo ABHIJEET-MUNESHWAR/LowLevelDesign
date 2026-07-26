@@ -1,5 +1,7 @@
 package com.lowleveldesign.ratelimiter.model;
 
+import com.lowleveldesign.ratelimiter.exception.InvalidRateLimiterConfigException;
+
 import java.time.Duration;
 
 /**
@@ -19,10 +21,10 @@ public final class RateLimiterConfig {
 
     private RateLimiterConfig(int permits, Duration window) {
         if (permits <= 0) {
-            throw new IllegalArgumentException("permits must be > 0, got " + permits);
+            throw new InvalidRateLimiterConfigException("permits must be > 0, got " + permits);
         }
         if (window == null || window.isZero() || window.isNegative()) {
-            throw new IllegalArgumentException("window must be a positive duration");
+            throw new InvalidRateLimiterConfigException("window must be a positive duration, got " + window);
         }
         this.permits = permits;
         this.window = window;
