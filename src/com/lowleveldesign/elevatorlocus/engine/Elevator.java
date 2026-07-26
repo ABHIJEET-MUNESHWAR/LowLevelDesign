@@ -5,7 +5,9 @@ import com.lowleveldesign.elevatorlocus.model.Request;
 import com.lowleveldesign.elevatorlocus.model.StopEvent;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A single elevator that schedules its own movement using the LOOK algorithm
@@ -34,9 +36,12 @@ public class Elevator {
     private int currentFloor;
     private Direction direction = Direction.IDLE;
 
-    private final List<Request>[] upHallCalls;
-    private final List<Request>[] downHallCalls;
-    private final List<Request>[] carCalls;
+    // Each floor holds a set of distinct passengers. LinkedHashSet is used so a
+    // passenger is never double-counted while boarding order stays deterministic
+    // for the output.
+    private final Set<Request>[] upHallCalls;
+    private final Set<Request>[] downHallCalls;
+    private final Set<Request>[] carCalls;
 
     @SuppressWarnings("unchecked")
     public Elevator(int startFloor, int minFloor, int maxFloor) {
@@ -44,13 +49,13 @@ public class Elevator {
         this.maxFloor = maxFloor;
         this.currentFloor = startFloor;
         int size = maxFloor + 1;
-        this.upHallCalls = new List[size];
-        this.downHallCalls = new List[size];
-        this.carCalls = new List[size];
+        this.upHallCalls = new Set[size];
+        this.downHallCalls = new Set[size];
+        this.carCalls = new Set[size];
         for (int f = 0; f < size; f++) {
-            upHallCalls[f] = new ArrayList<>();
-            downHallCalls[f] = new ArrayList<>();
-            carCalls[f] = new ArrayList<>();
+            upHallCalls[f] = new LinkedHashSet<>();
+            downHallCalls[f] = new LinkedHashSet<>();
+            carCalls[f] = new LinkedHashSet<>();
         }
     }
 
