@@ -33,14 +33,13 @@ public final class RateLimiterDemo {
 
     /** Demonstrates a burst up to capacity followed by throttling once the bucket is empty. */
     private static void tokenBucketDemo() {
-        System.out.println("=== Token Bucket: 3 requests / 300ms, burst then throttle ===");
         RateLimiterConfig config = RateLimiterConfig.of(3, Duration.ofMillis(300));
+        System.out.println("=== Token Bucket: " + config + ", burst then throttle ===");
         RateLimiter limiter = RateLimiterFactory.create(RateLimiterType.TOKEN_BUCKET, config);
 
         for (int i = 1; i <= 4; i++) {
             RateLimitResult result = limiter.tryAcquireDetailed("client-A");
-            System.out.printf("  request #%d -> allowed=%s remaining=%d retryAfterMs=%d%n",
-                    i, result.allowed(), result.remainingPermits(), result.retryAfterMillis());
+            System.out.println("  request #" + i + " -> " + result);
         }
         System.out.println();
     }
@@ -58,7 +57,7 @@ public final class RateLimiterDemo {
         System.out.println("  spending both permits right away: "
                 + limiter.tryAcquire("client-B") + ", " + limiter.tryAcquire("client-B"));
         System.out.println("  3rd request in same window (should deny): " + limiter.tryAcquire("client-B"));
-        Thread.sleep(205); // cross into the next window
+        Thread.sleep(config.window().toMillis() + 5); // cross into the next window
         System.out.println("  2 more requests right after window reset (fixed window allows"
                 + " this back-to-back burst): "
                 + limiter.tryAcquire("client-B") + ", " + limiter.tryAcquire("client-B"));
