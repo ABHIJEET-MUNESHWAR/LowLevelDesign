@@ -33,16 +33,38 @@ public final class TokenBucketRateLimiter implements RateLimiter {
     private final Ticker ticker;
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
 
+    /**
+     * Constructs a token-bucket limiter.
+     *
+     * @param config the policy: capacity = {@code permits}, refill rate = {@code permits/window}
+     * @param ticker the time source used to compute lazy refills
+     */
     public TokenBucketRateLimiter(RateLimiterConfig config, Ticker ticker) {
         this.config = config;
         this.ticker = ticker;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delegates to {@link #tryAcquireDetailed(String, int)} and returns only the boolean verdict.
+     */
     @Override
     public boolean tryAcquire(String clientId, int permits) {
         return tryAcquireDetailed(clientId, permits).allowed();
     }
 
+    /**
+     * Lazily refills the client's bucket based on elapsed time, then spends {@code permits} tokens
+     * if enough are available. The refill-then-spend sequence runs under the bucket's own monitor
+     * lock so it is atomic per client.
+     *
+     * @param clientId identifier of the tenant being limited
+     * @param permits  number of tokens to consume; must be positive
+     * @return an allow result carrying the remaining whole-token count, or a deny result whose
+     *         retry-after estimates when enough tokens will have refilled
+     * @throws InvalidRateLimitRequestException if {@code permits <= 0}
+     */
     @Override
     public RateLimitResult tryAcquireDetailed(String clientId, int permits) {
         if (permits <= 0) {
@@ -67,6 +89,12 @@ public final class TokenBucketRateLimiter implements RateLimiter {
         }
     }
 
+    /**
+     * Tops up a bucket by the number of tokens that have accrued since it was last touched,
+     * capped at capacity. Must be called while holding the bucket's monitor lock.
+     *
+     * @param bucket the client's bucket to refill in place
+     */
     private void refill(Bucket bucket) {
         long now = ticker.nanoTime();
         long elapsed = now - bucket.lastRefillNanos;

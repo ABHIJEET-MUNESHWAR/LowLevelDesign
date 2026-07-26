@@ -12,14 +12,32 @@ import com.lowleveldesign.ratelimiter.model.Ticker;
  */
 public final class RateLimiterFactory {
 
+    /** Non-instantiable: this is a static utility holder. */
     private RateLimiterFactory() {
     }
 
+    /**
+     * Creates a rate limiter of the requested algorithm backed by the real system clock.
+     *
+     * @param type   which algorithm to instantiate
+     * @param config the "permits per window" policy to enforce
+     * @return a ready-to-use {@link RateLimiter}
+     * @throws UnknownRateLimiterTypeException if {@code type} has no mapped implementation
+     */
     public static RateLimiter create(RateLimiterType type, RateLimiterConfig config) {
         return create(type, config, Ticker.systemTicker());
     }
 
-    /** Overload that accepts a {@link Ticker}, primarily so tests can inject a fake clock. */
+    /**
+     * Creates a rate limiter of the requested algorithm with an explicit {@link Ticker},
+     * primarily so tests can inject a deterministic fake clock.
+     *
+     * @param type   which algorithm to instantiate
+     * @param config the "permits per window" policy to enforce
+     * @param ticker the time source the limiter should read
+     * @return a ready-to-use {@link RateLimiter}
+     * @throws UnknownRateLimiterTypeException if {@code type} has no mapped implementation
+     */
     public static RateLimiter create(RateLimiterType type, RateLimiterConfig config, Ticker ticker) {
         switch (type) {
             case TOKEN_BUCKET:
