@@ -19,6 +19,7 @@ import com.lowleveldesign.instacart.order.OrderItem;
 import com.lowleveldesign.instacart.order.OrderService;
 import com.lowleveldesign.instacart.order.OrderStatus;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -74,6 +75,11 @@ public final class TestRunner {
                 TestRunner::testCheckoutTwiceThrows);
         run("cancelOrder on an already-cancelled order throws InvalidOrderStateException",
                 TestRunner::testCancelOrderTwiceThrows);
+        run("Product getters return the values passed to its constructor", TestRunner::testProductGetters);
+        run("Store getters return the values passed to its constructor", TestRunner::testStoreGetters);
+        run("Order exposes the customerId and items it was constructed with", TestRunner::testOrderGetters);
+        run("a reservation's expiry instant is set from its TTL", TestRunner::testReservationExpiresAt);
+        run("updateLowStockThreshold changes when low-stock alerts fire", TestRunner::testUpdateLowStockThreshold);
 
         System.out.println("\n" + passed + " passed, " + failed + " failed");
         // The manager's background scheduler thread is non-daemon; shut it down so the JVM exits.
@@ -548,4 +554,74 @@ public final class TestRunner {
         }
         return null;
     }
+
+    // ------------------------------------------------------------------
+    // Getter / accessor coverage tests
+    // ------------------------------------------------------------------
+
+    private static Void testProductGetters() {
+        Product product = new Product(nextId("prod"), "Organic Bananas", "Produce", 0.59);
+        assertEquals("Organic Bananas", product.getName(), "getName should return the constructor value");
+        assertEquals("Produce", product.getCategory(), "getCategory should return the constructor value");
+        assertEquals(0.59, product.getPrice(), "getPrice should return the constructor value");
+        return null;
+    }
+
+    private static Void testStoreGetters() {
+        Store store = new Store(nextId("store"), "Whole Foods", "123 Market St");
+        assertEquals("Whole Foods", store.getName(), "getName should return the constructor value");
+        assertEquals("123 Market St", store.getAddress(), "getAddress should return the constructor value");
+        return null;
+    }
+
+    private static Void testOrderGetters() {
+        InventoryManager manager = InventoryManager.getInstance();
+        OrderService orderService = new OrderService(manager);
+        Store store = newStore();
+        Product product = newProduct();
+        manager.stockProduct(store, product, 20, 5);
+
+        List<OrderItem> items = Arrays.asList(new OrderItem(product.getProductId(), 4));
+        Order order = orderService.placeOrder("cust-42", store.getStoreId(), items);
+
+        assertEquals("cust-42", order.getCustomerId(), "getCustomerId should return the constructor value");
+        assertEquals(items, order.getItems(), "getItems should return the exact line items the order was placed with");
+        assertEquals(store.getStoreId(), order.getStoreId(), "getStoreId should return the constructor value");
+        return null;
+    }
+
+    private static Void testReservationExpiresAt() {
+        InventoryManager manager = InventoryManager.getInstance();
+        Store store = newStore();
+        Product product = newProduct();
+        manager.stockProduct(store, product, 20, 5);
+
+        Instant before = Instant.now();
+        Reservation reservation = manager.reserveStock(store.getStoreId(), product.getProductId(), 4, 60);
+
+        assertTrue(reservation.getExpiresAt().isAfter(before),
+                "A reservation's expiry instant should be in the future relative to when it was created");
+        assertTrue(reservation.getExpiresAt().isBefore(before.plusSeconds(61)),
+                "A reservation's expiry instant should honor the requested TTL (60s)");
+        return null;
+    }
+
+    private static Void testUpdateLowStockThreshold() {
+        InventoryManager manager = InventoryManager.getInstance();
+        Store store = newStore();
+        Product product = newProduct();
+        manager.stockProduct(store, product, 10, 2);
+
+        InventoryItem item = manager.getInventoryItem(store.getStoreId(), product.getProductId());
+        // 8 available (after reserving 2) is not below the original threshold of 2.
+        manager.reserveStock(store.getStoreId(), product.getProductId(), 2, 60);
+        assertTrue(!item.isBelowThreshold(), "8 available should not be low stock with the original threshold of 2");
+
+        // Raising the threshold to 8 should immediately flag the same available quantity as low.
+        manager.updateLowStockThreshold(store.getStoreId(), product.getProductId(), 8);
+        assertEquals(8, item.getLowStockThreshold(), "getLowStockThreshold should reflect the update");
+        assertTrue(item.isBelowThreshold(), "8 available should be low stock once the threshold is raised to 8");
+        return null;
+    }
 }
+

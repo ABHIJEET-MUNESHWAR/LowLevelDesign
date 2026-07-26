@@ -251,6 +251,19 @@ public final class InventoryManager {
     }
 
     /**
+     * Updates the low-stock alert threshold for an already-tracked (store, product) pair (e.g. a
+     * store admin adjusting merchandising rules for a product).
+     *
+     * @param storeId           the store id
+     * @param productId         the product id
+     * @param lowStockThreshold the new available-quantity threshold at/below which alerts fire
+     * @throws ProductNotTrackedException if the (store, product) pair has never been stocked
+     */
+    public void updateLowStockThreshold(String storeId, String productId, int lowStockThreshold) {
+        getItem(storeId, productId).setLowStockThreshold(lowStockThreshold);
+    }
+
+    /**
      * Stops the background expiry-sweep scheduler. Should be called on application shutdown so
      * the (non-daemon) scheduler thread does not keep the JVM alive.
      */
