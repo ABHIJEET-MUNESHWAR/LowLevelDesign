@@ -8,6 +8,11 @@ package com.lowleveldesign.ratelimiter.exception;
  */
 public class InvalidRateLimitRequestException extends RateLimiterException {
 
+    /**
+     * Creates the exception describing the invalid request argument.
+     *
+     * @param message the specific problem (typically a non-positive permit count)
+     */
     public InvalidRateLimitRequestException(String message) {
         super(message);
     }

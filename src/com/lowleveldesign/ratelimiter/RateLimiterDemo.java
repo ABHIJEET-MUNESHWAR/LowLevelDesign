@@ -17,6 +17,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class RateLimiterDemo {
 
+    /**
+     * Entry point: runs each algorithm's demo scenario in turn.
+     *
+     * @param args ignored
+     * @throws InterruptedException if a {@code Thread.sleep} or thread join is interrupted
+     */
     public static void main(String[] args) throws InterruptedException {
         tokenBucketDemo();
         fixedWindowBoundaryBurstDemo();
@@ -25,6 +31,7 @@ public final class RateLimiterDemo {
         concurrentRaceDemo();
     }
 
+    /** Demonstrates a burst up to capacity followed by throttling once the bucket is empty. */
     private static void tokenBucketDemo() {
         System.out.println("=== Token Bucket: 3 requests / 300ms, burst then throttle ===");
         RateLimiterConfig config = RateLimiterConfig.of(3, Duration.ofMillis(300));
@@ -38,6 +45,11 @@ public final class RateLimiterDemo {
         System.out.println();
     }
 
+    /**
+     * Demonstrates the fixed-window boundary burst: 2x permits can land across a window edge.
+     *
+     * @throws InterruptedException if the sleep crossing the window boundary is interrupted
+     */
     private static void fixedWindowBoundaryBurstDemo() throws InterruptedException {
         System.out.println("=== Fixed Window Counter: boundary burst (2 permits / 200ms) ===");
         RateLimiterConfig config = RateLimiterConfig.of(2, Duration.ofMillis(200));
@@ -53,6 +65,11 @@ public final class RateLimiterDemo {
         System.out.println();
     }
 
+    /**
+     * Demonstrates exact accounting: a slot frees only once its own timestamp ages out.
+     *
+     * @throws InterruptedException if the sleep waiting for the window to elapse is interrupted
+     */
     private static void slidingWindowLogDemo() throws InterruptedException {
         System.out.println("=== Sliding Window Log: exact accounting (2 permits / 200ms) ===");
         RateLimiterConfig config = RateLimiterConfig.of(2, Duration.ofMillis(200));
@@ -66,6 +83,11 @@ public final class RateLimiterDemo {
         System.out.println();
     }
 
+    /**
+     * Demonstrates how the weighted previous-window count smooths away the boundary burst.
+     *
+     * @throws InterruptedException if the sleep crossing into the next window is interrupted
+     */
     private static void slidingWindowCounterDemo() throws InterruptedException {
         System.out.println("=== Sliding Window Counter: smooths the boundary burst (2 permits / 200ms) ===");
         RateLimiterConfig config = RateLimiterConfig.of(2, Duration.ofMillis(200));
@@ -79,6 +101,11 @@ public final class RateLimiterDemo {
         System.out.println();
     }
 
+    /**
+     * Fires many threads at one client simultaneously to show exactly capacity permits are granted.
+     *
+     * @throws InterruptedException if the thread coordination latches are interrupted
+     */
     private static void concurrentRaceDemo() throws InterruptedException {
         System.out.println("=== Concurrent race: 20 threads, 5 permits / 1s, token bucket ===");
         RateLimiterConfig config = RateLimiterConfig.of(5, Duration.ofSeconds(1));

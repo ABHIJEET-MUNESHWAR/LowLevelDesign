@@ -30,16 +30,38 @@ public final class FixedWindowCounterRateLimiter implements RateLimiter {
     private final Ticker ticker;
     private final ConcurrentHashMap<String, WindowState> states = new ConcurrentHashMap<>();
 
+    /**
+     * Constructs a fixed-window-counter limiter.
+     *
+     * @param config the policy: at most {@code permits} requests per fixed {@code window}
+     * @param ticker the time source used to derive the current window index
+     */
     public FixedWindowCounterRateLimiter(RateLimiterConfig config, Ticker ticker) {
         this.config = config;
         this.ticker = ticker;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delegates to {@link #tryAcquireDetailed(String, int)} and returns only the boolean verdict.
+     */
     @Override
     public boolean tryAcquire(String clientId, int permits) {
         return tryAcquireDetailed(clientId, permits).allowed();
     }
 
+    /**
+     * Resets the client's counter if the epoch-aligned window has rolled over, then admits the
+     * request iff the counter for the current window stays within {@code permits}. The
+     * check-and-increment runs under the state's monitor lock so it is atomic per client.
+     *
+     * @param clientId identifier of the tenant being limited
+     * @param permits  number of permits to consume; must be positive
+     * @return an allow result with the remaining count, or a deny result whose retry-after is the
+     *         time until the current window ends
+     * @throws InvalidRateLimitRequestException if {@code permits <= 0}
+     */
     @Override
     public RateLimitResult tryAcquireDetailed(String clientId, int permits) {
         if (permits <= 0) {

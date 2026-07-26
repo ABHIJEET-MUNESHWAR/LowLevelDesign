@@ -7,6 +7,11 @@ package com.lowleveldesign.ratelimiter.exception;
  */
 public class UnsupportedRateLimiterOperationException extends RateLimiterException {
 
+    /**
+     * Creates the exception describing the unsupported operation.
+     *
+     * @param message what was requested and why the algorithm cannot support it
+     */
     public UnsupportedRateLimiterOperationException(String message) {
         super(message);
     }

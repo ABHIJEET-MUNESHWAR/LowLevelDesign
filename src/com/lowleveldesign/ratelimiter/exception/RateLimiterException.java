@@ -10,6 +10,11 @@ package com.lowleveldesign.ratelimiter.exception;
  */
 public abstract class RateLimiterException extends RuntimeException {
 
+    /**
+     * Creates the exception with a human-readable explanation.
+     *
+     * @param message describes what was invalid or unsupported
+     */
     protected RateLimiterException(String message) {
         super(message);
     }

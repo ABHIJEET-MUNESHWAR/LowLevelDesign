@@ -7,6 +7,11 @@ package com.lowleveldesign.ratelimiter.exception;
  */
 public class InvalidRateLimiterConfigException extends RateLimiterException {
 
+    /**
+     * Creates the exception describing the invalid policy.
+     *
+     * @param message the specific validation that failed (e.g. non-positive permits or window)
+     */
     public InvalidRateLimiterConfigException(String message) {
         super(message);
     }

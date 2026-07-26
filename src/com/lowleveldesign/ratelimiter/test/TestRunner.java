@@ -27,6 +27,12 @@ public final class TestRunner {
     private static int passed = 0;
     private static int failed = 0;
 
+    /**
+     * Runs the whole suite and exits non-zero if any assertion failed.
+     *
+     * @param args ignored
+     * @throws InterruptedException if the concurrency test's thread coordination is interrupted
+     */
     public static void main(String[] args) throws InterruptedException {
         testTokenBucketBurstThenThrottleThenRefill();
         testFixedWindowResetsOnBoundary();
@@ -45,6 +51,7 @@ public final class TestRunner {
         }
     }
 
+    /** Verifies the token bucket allows a full burst, denies once empty, then refills over time. */
     private static void testTokenBucketBurstThenThrottleThenRefill() {
         FakeTicker ticker = new FakeTicker();
         RateLimiterConfig config = RateLimiterConfig.of(3, Duration.ofSeconds(3)); // 1 token/sec
@@ -63,6 +70,7 @@ public final class TestRunner {
         assertFalse("second token not yet available", limiter.tryAcquire("c1"));
     }
 
+    /** Verifies the fixed-window counter resets to zero when the window rolls over. */
     private static void testFixedWindowResetsOnBoundary() {
         FakeTicker ticker = new FakeTicker();
         RateLimiterConfig config = RateLimiterConfig.of(2, Duration.ofSeconds(1));
@@ -76,6 +84,7 @@ public final class TestRunner {
         assertTrue("new window resets counter", limiter.tryAcquire("c2"));
     }
 
+    /** Documents the fixed-window weakness: up to 2x permits can pass straddling a boundary. */
     private static void testFixedWindowBoundaryBurstIsAllowed() {
         // Documents the known weakness: back-to-back bursts straddling a window boundary.
         FakeTicker ticker = new FakeTicker();
@@ -92,6 +101,7 @@ public final class TestRunner {
         // 4 permits granted within ~4ms even though the policy is "2 per second".
     }
 
+    /** Verifies the sliding-window log frees a slot only when that entry's own timestamp ages out. */
     private static void testSlidingWindowLogExactAccounting() {
         FakeTicker ticker = new FakeTicker();
         RateLimiterConfig config = RateLimiterConfig.of(2, Duration.ofSeconds(1));
@@ -107,6 +117,7 @@ public final class TestRunner {
         assertFalse("but the t=500ms entry is still within its own window", limiter.tryAcquire("c4"));
     }
 
+    /** Verifies a denied request reports a retry-after equal to the full window when at limit. */
     private static void testSlidingWindowLogRetryAfterMatchesOldestEntry() {
         FakeTicker ticker = new FakeTicker();
         RateLimiterConfig config = RateLimiterConfig.of(1, Duration.ofSeconds(1));
@@ -118,6 +129,7 @@ public final class TestRunner {
         assertEquals("retryAfter equals full window", 1000L, denied.retryAfterMillis());
     }
 
+    /** Verifies the sliding-window counter still throttles just after a boundary, then relaxes. */
     private static void testSlidingWindowCounterSmoothsBoundaryBurst() {
         FakeTicker ticker = new FakeTicker();
         RateLimiterConfig config = RateLimiterConfig.of(2, Duration.ofSeconds(1));
@@ -134,6 +146,7 @@ public final class TestRunner {
         assertTrue("previous window's weight has mostly decayed", limiter.tryAcquire("c6"));
     }
 
+    /** Verifies that one client's consumption does not affect another client's permits. */
     private static void testPerClientIsolation() {
         FakeTicker ticker = new FakeTicker();
         RateLimiterConfig config = RateLimiterConfig.of(1, Duration.ofSeconds(1));
@@ -144,6 +157,7 @@ public final class TestRunner {
         assertFalse("client X is now exhausted", limiter.tryAcquire("clientX"));
     }
 
+    /** Verifies each misuse path throws its specific custom exception type. */
     private static void testCustomExceptionsAreThrown() {
         assertThrows("non-positive permits config rejected", InvalidRateLimiterConfigException.class,
                 () -> RateLimiterConfig.of(0, Duration.ofSeconds(1)));
@@ -160,6 +174,11 @@ public final class TestRunner {
                 UnsupportedRateLimiterOperationException.class, () -> log.tryAcquire("c", 2));
     }
 
+    /**
+     * Verifies that when far more threads than permits race for one client, exactly capacity win.
+     *
+     * @throws InterruptedException if the thread coordination latches are interrupted
+     */
     private static void testConcurrentRaceGrantsExactlyCapacityPermits() throws InterruptedException {
         RateLimiterConfig config = RateLimiterConfig.of(10, Duration.ofSeconds(60));
         RateLimiter limiter = RateLimiterFactory.create(RateLimiterType.TOKEN_BUCKET, config);
@@ -190,19 +209,45 @@ public final class TestRunner {
 
     // ---- tiny assertion helpers ----
 
+    /**
+     * Passes when {@code condition} is true.
+     *
+     * @param label     description reported for this check
+     * @param condition the value expected to be {@code true}
+     */
     private static void assertTrue(String label, boolean condition) {
         report(label, condition);
     }
 
+    /**
+     * Passes when {@code condition} is false.
+     *
+     * @param label     description reported for this check
+     * @param condition the value expected to be {@code false}
+     */
     private static void assertFalse(String label, boolean condition) {
         report(label, !condition);
     }
 
+    /**
+     * Passes when {@code expected} equals {@code actual}.
+     *
+     * @param label    description reported for this check
+     * @param expected the expected value
+     * @param actual   the observed value
+     */
     private static void assertEquals(String label, long expected, long actual) {
         boolean ok = expected == actual;
         report(label + " (expected=" + expected + ", actual=" + actual + ")", ok);
     }
 
+    /**
+     * Passes when running {@code action} throws an exception assignable to {@code expected}.
+     *
+     * @param label    description reported for this check
+     * @param expected the exception type that must be thrown
+     * @param action   the code expected to throw
+     */
     private static void assertThrows(String label, Class<? extends Throwable> expected, Runnable action) {
         try {
             action.run();
@@ -214,6 +259,12 @@ public final class TestRunner {
         }
     }
 
+    /**
+     * Records a single check's outcome, printing a PASS/FAIL line and updating the tallies.
+     *
+     * @param label description of the check
+     * @param ok    whether the check passed
+     */
     private static void report(String label, boolean ok) {
         if (ok) {
             passed++;
@@ -228,10 +279,20 @@ public final class TestRunner {
     private static final class FakeTicker implements Ticker {
         private final AtomicLong nanos = new AtomicLong(1_000_000_000_000L);
 
+        /**
+         * Advances the fake clock by the given duration.
+         *
+         * @param duration how far to move time forward
+         */
         void advance(Duration duration) {
             nanos.addAndGet(duration.toNanos());
         }
 
+        /**
+         * Returns the current fake time.
+         *
+         * @return the accumulated nanosecond reading
+         */
         @Override
         public long nanoTime() {
             return nanos.get();

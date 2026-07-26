@@ -38,16 +38,40 @@ public final class SlidingWindowCounterRateLimiter implements RateLimiter {
     private final Ticker ticker;
     private final ConcurrentHashMap<String, WindowState> states = new ConcurrentHashMap<>();
 
+    /**
+     * Constructs a sliding-window-counter limiter.
+     *
+     * @param config the policy: approximately at most {@code permits} requests per trailing
+     *               {@code window}
+     * @param ticker the time source used to derive the current window index and overlap fraction
+     */
     public SlidingWindowCounterRateLimiter(RateLimiterConfig config, Ticker ticker) {
         this.config = config;
         this.ticker = ticker;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delegates to {@link #tryAcquireDetailed(String, int)} and returns only the boolean verdict.
+     */
     @Override
     public boolean tryAcquire(String clientId, int permits) {
         return tryAcquireDetailed(clientId, permits).allowed();
     }
 
+    /**
+     * Rolls the client's window counters forward, computes the weighted estimate
+     * {@code previousCount * overlapFraction + currentCount}, and admits the request iff that
+     * estimate plus {@code permits} stays within the limit. Runs under the state's monitor lock so
+     * it is atomic per client.
+     *
+     * @param clientId identifier of the tenant being limited
+     * @param permits  number of permits to consume; must be positive
+     * @return an allow result with the approximate remaining count, or a deny result whose
+     *         retry-after is the time until the current window ends
+     * @throws InvalidRateLimitRequestException if {@code permits <= 0}
+     */
     @Override
     public RateLimitResult tryAcquireDetailed(String clientId, int permits) {
         if (permits <= 0) {
@@ -74,7 +98,15 @@ public final class SlidingWindowCounterRateLimiter implements RateLimiter {
         }
     }
 
-    /** Rolls {@code currentCount}/{@code previousCount} forward, handling gaps of >= 2 windows. */
+    /**
+     * Rolls a client's window counters forward to {@code currentWindow}: promotes the current
+     * count to "previous" for an adjacent window, or clears both if the client has been idle for
+     * two or more windows (so no stale traffic leaks into the estimate). Must be called while
+     * holding the state's monitor lock.
+     *
+     * @param state         the client's window state, mutated in place
+     * @param currentWindow the epoch-aligned index of the window {@code now} falls in
+     */
     private void advanceWindow(WindowState state, long currentWindow) {
         if (state.currentWindowIndex == currentWindow) {
             return;

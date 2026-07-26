@@ -7,6 +7,11 @@ package com.lowleveldesign.ratelimiter.exception;
  */
 public class UnknownRateLimiterTypeException extends RateLimiterException {
 
+    /**
+     * Creates the exception naming the unrecognized type.
+     *
+     * @param message identifies the {@code RateLimiterType} that had no factory mapping
+     */
     public UnknownRateLimiterTypeException(String message) {
         super(message);
     }

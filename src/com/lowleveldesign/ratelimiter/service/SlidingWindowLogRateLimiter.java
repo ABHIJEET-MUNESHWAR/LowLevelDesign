@@ -27,16 +27,40 @@ public final class SlidingWindowLogRateLimiter implements RateLimiter {
     private final Ticker ticker;
     private final ConcurrentHashMap<String, ArrayDeque<Long>> logs = new ConcurrentHashMap<>();
 
+    /**
+     * Constructs a sliding-window-log limiter.
+     *
+     * @param config the policy: at most {@code permits} requests in any trailing {@code window}
+     * @param ticker the time source used to timestamp and age out requests
+     */
     public SlidingWindowLogRateLimiter(RateLimiterConfig config, Ticker ticker) {
         this.config = config;
         this.ticker = ticker;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Delegates to {@link #tryAcquireDetailed(String, int)} and returns only the boolean verdict.
+     */
     @Override
     public boolean tryAcquire(String clientId, int permits) {
         return tryAcquireDetailed(clientId, permits).allowed();
     }
 
+    /**
+     * Evicts timestamps older than {@code now - window} from the client's log, then admits the
+     * request iff fewer than {@code permits} entries remain, appending {@code now} on success. All
+     * of this runs under the log's monitor lock so it is atomic per client.
+     *
+     * @param clientId identifier of the tenant being limited
+     * @param permits  must be exactly {@code 1}; this algorithm's exact log is defined only for
+     *                 single-permit acquisition
+     * @return an allow result with the remaining count, or a deny result whose retry-after is when
+     *         the oldest logged request will exit the window
+     * @throws InvalidRateLimitRequestException           if {@code permits <= 0}
+     * @throws UnsupportedRateLimiterOperationException    if {@code permits != 1}
+     */
     @Override
     public RateLimitResult tryAcquireDetailed(String clientId, int permits) {
         if (permits <= 0) {
