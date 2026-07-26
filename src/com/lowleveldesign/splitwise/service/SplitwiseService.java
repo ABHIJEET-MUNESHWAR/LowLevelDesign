@@ -1,6 +1,11 @@
 package com.lowleveldesign.splitwise.service;
 
-import com.lowleveldesign.splitwise.exception.InvalidSplitException;
+import com.lowleveldesign.splitwise.exception.GroupNotFoundException;
+import com.lowleveldesign.splitwise.exception.InvalidExpenseException;
+import com.lowleveldesign.splitwise.exception.InvalidSettlementException;
+import com.lowleveldesign.splitwise.exception.UserAlreadyExistsException;
+import com.lowleveldesign.splitwise.exception.UserNotFoundException;
+import com.lowleveldesign.splitwise.exception.UserNotInGroupException;
 import com.lowleveldesign.splitwise.model.Expense;
 import com.lowleveldesign.splitwise.model.Group;
 import com.lowleveldesign.splitwise.model.Split;
@@ -27,14 +32,38 @@ public class SplitwiseService {
     private final BalanceSheet balanceSheet = new BalanceSheet();
 
     public void registerUser(User user) {
+        if (user == null) {
+            throw new InvalidExpenseException("User must not be null");
+        }
+        if (users.containsKey(user.getId())) {
+            throw new UserAlreadyExistsException(user.getId());
+        }
         users.put(user.getId(), user);
     }
 
     public Group createGroup(String name, List<User> members) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new InvalidExpenseException("Group name must not be empty");
+        }
+        if (members == null || members.isEmpty()) {
+            throw new InvalidExpenseException("A group must have at least one member");
+        }
         Group group = new Group(name);
-        members.forEach(group::addMember);
+        for (User member : members) {
+            requireRegistered(member);
+            group.addMember(member);
+        }
         groups.put(group.getId(), group);
         return group;
+    }
+
+    private void requireRegistered(User user) {
+        if (user == null) {
+            throw new UserNotFoundException("null");
+        }
+        if (!users.containsKey(user.getId())) {
+            throw new UserNotFoundException(user.getId());
+        }
     }
 
     /**
@@ -49,8 +78,16 @@ public class SplitwiseService {
      */
     public Expense addExpense(String description, double amount, User paidBy, List<Split> splits, SplitType splitType) {
         if (amount <= 0) {
-            throw new InvalidSplitException("Expense amount must be positive");
+            throw new InvalidExpenseException("Expense amount must be positive");
         }
+        if (splits == null || splits.isEmpty()) {
+            throw new InvalidExpenseException("An expense must have at least one participant");
+        }
+        requireRegistered(paidBy);
+        for (Split split : splits) {
+            requireRegistered(split.getUser());
+        }
+
         SplitStrategy strategy = SplitStrategyFactory.getStrategy(splitType);
         strategy.validateAndCompute(amount, splits);
 
@@ -66,13 +103,36 @@ public class SplitwiseService {
     /** Adds an expense and also records it against the given group's history. */
     public Expense addExpenseToGroup(Group group, String description, double amount, User paidBy,
                                       List<Split> splits, SplitType splitType) {
+        if (group == null || !groups.containsKey(group.getId())) {
+            throw new GroupNotFoundException(group == null ? "null" : group.getId());
+        }
+        requireGroupMember(group, paidBy);
+        if (splits != null) {
+            for (Split split : splits) {
+                requireGroupMember(group, split.getUser());
+            }
+        }
         Expense expense = addExpense(description, amount, paidBy, splits, splitType);
         group.addExpense(expense);
         return expense;
     }
 
+    private void requireGroupMember(Group group, User user) {
+        if (user == null || !group.getMembers().contains(user)) {
+            throw new UserNotInGroupException(user == null ? "null" : user.getId(), group.getName());
+        }
+    }
+
     /** Records a cash settlement: {@code payer} pays {@code payee} the given amount. */
     public void settleUp(User payer, User payee, double amount) {
+        requireRegistered(payer);
+        requireRegistered(payee);
+        if (payer.equals(payee)) {
+            throw new InvalidSettlementException("A user cannot settle up with themselves");
+        }
+        if (amount <= 0) {
+            throw new InvalidSettlementException("Settlement amount must be positive");
+        }
         balanceSheet.settle(payer, payee, amount);
     }
 
@@ -104,6 +164,9 @@ public class SplitwiseService {
      * biggest debtor.
      */
     public void simplifyGroupDebts(Group group) {
+        if (group == null || !groups.containsKey(group.getId())) {
+            throw new GroupNotFoundException(group == null ? "null" : group.getId());
+        }
         Map<User, Double> net = new HashMap<>();
         List<User> members = group.getMembers();
         for (User u : members) {

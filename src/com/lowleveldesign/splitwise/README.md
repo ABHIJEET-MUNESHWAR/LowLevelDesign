@@ -47,7 +47,15 @@ splitwise/
 │   ├── BalanceSheet.java
 │   └── SplitwiseService.java
 └── exception/
-    └── InvalidSplitException.java
+    ├── SplitwiseException.java
+    ├── InvalidSplitException.java
+    ├── InvalidExpenseException.java
+    ├── InvalidSettlementException.java
+    ├── UserNotFoundException.java
+    ├── UserAlreadyExistsException.java
+    ├── GroupNotFoundException.java
+    ├── UserNotInGroupException.java
+    └── UnsupportedSplitTypeException.java
 ```
 
 ## Folder Details
@@ -85,9 +93,21 @@ Application/orchestration layer — the only layer that mutates shared state.
 
 ### `exception`
 
-| Class                    | Responsibility |
-|--------------------------|-----------------|
-| `InvalidSplitException`  | Unchecked exception thrown when split input is invalid (e.g. exact amounts don't sum to the total, percentages don't sum to 100, zero participants). |
+All domain exceptions are unchecked and extend a common base
+`SplitwiseException`, so callers can either catch a specific type or catch
+`SplitwiseException` to handle every business-rule violation in one place.
+
+| Class                          | Thrown when |
+|--------------------------------|-------------|
+| `SplitwiseException`           | Base type for all exceptions below (never thrown directly). |
+| `InvalidSplitException`        | Split input is invalid — exact amounts don't sum to the total, percentages don't sum to 100, or a percent is missing. |
+| `InvalidExpenseException`      | The expense itself is invalid — non-positive amount, no participants, null user, or empty group name. |
+| `InvalidSettlementException`   | A cash settlement is invalid — non-positive amount or a user settling up with themselves. |
+| `UserNotFoundException`        | An operation references a user who was never registered with the service. |
+| `UserAlreadyExistsException`   | Registering a user whose id is already in use. |
+| `GroupNotFoundException`       | An operation references a group unknown to the service. |
+| `UserNotInGroupException`      | A group expense's payer or participant is not a member of that group. |
+| `UnsupportedSplitTypeException`| The factory is asked for a strategy for a `SplitType` with no implementation (or `null`). |
 
 ### `Main.java`
 A runnable demo: registers 4 users, creates a group, adds one expense of each
@@ -219,7 +239,31 @@ classDiagram
         +simplifyGroupDebts(Group)
     }
 
+    class SplitwiseException {
+        <<exception>>
+    }
     class InvalidSplitException {
+        <<exception>>
+    }
+    class InvalidExpenseException {
+        <<exception>>
+    }
+    class InvalidSettlementException {
+        <<exception>>
+    }
+    class UserNotFoundException {
+        <<exception>>
+    }
+    class UserAlreadyExistsException {
+        <<exception>>
+    }
+    class GroupNotFoundException {
+        <<exception>>
+    }
+    class UserNotInGroupException {
+        <<exception>>
+    }
+    class UnsupportedSplitTypeException {
         <<exception>>
     }
 
@@ -228,6 +272,17 @@ classDiagram
     SplitStrategy <|.. PercentSplitStrategy
     SplitStrategyFactory ..> SplitStrategy : creates
     SplitStrategyFactory ..> SplitType : reads
+    SplitStrategyFactory ..> UnsupportedSplitTypeException : throws
+
+    RuntimeException <|-- SplitwiseException
+    SplitwiseException <|-- InvalidSplitException
+    SplitwiseException <|-- InvalidExpenseException
+    SplitwiseException <|-- InvalidSettlementException
+    SplitwiseException <|-- UserNotFoundException
+    SplitwiseException <|-- UserAlreadyExistsException
+    SplitwiseException <|-- GroupNotFoundException
+    SplitwiseException <|-- UserNotInGroupException
+    SplitwiseException <|-- UnsupportedSplitTypeException
 
     Expense "1" --> "1" User : paidBy
     Expense "1" o-- "many" Split : splits
@@ -239,7 +294,7 @@ classDiagram
 
     SplitwiseService --> BalanceSheet : uses
     SplitwiseService --> SplitStrategyFactory : uses
-    SplitwiseService ..> InvalidSplitException : throws
+    SplitwiseService ..> SplitwiseException : throws
     SplitwiseService --> Group : manages
     SplitwiseService --> User : manages
     SplitStrategy ..> InvalidSplitException : throws
@@ -354,6 +409,7 @@ possible.
 | **Static Factory Method**    | `Split.equalShare(...)`, `Split.exactShare(...)`, `Split.percentShare(...)` | More readable than overloaded/telescoping constructors and makes each split-type's required inputs explicit at the call site. |
 | **Immutable Value Object**   | `Expense`, `User`, `Split`'s `user`/`percent` fields                 | Expenses are historical facts that must never change after creation; immutability prevents accidental post-hoc mutation and makes the object safe to share/read concurrently. |
 | **Repository-ish Ledger**    | `BalanceSheet`                                                       | Encapsulates the balance data structure and all mutation/query rules (symmetry, rounding epsilon) behind a small API, so `SplitwiseService` never manipulates the raw map directly. |
+| **Exception Hierarchy**      | `SplitwiseException` + `InvalidSplitException` / `InvalidExpenseException` / `InvalidSettlementException` / `UserNotFoundException` / `UserAlreadyExistsException` / `GroupNotFoundException` / `UserNotInGroupException` / `UnsupportedSplitTypeException` | A single unchecked base type lets callers catch every domain violation with one `catch (SplitwiseException e)`, while the specific subclasses carry precise semantics for targeted handling. Unchecked keeps the fluent service API free of `throws` clutter. |
 
 ## Extending the Design
 

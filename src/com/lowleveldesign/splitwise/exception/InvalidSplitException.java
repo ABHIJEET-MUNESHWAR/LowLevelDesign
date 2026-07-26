@@ -5,7 +5,7 @@ package com.lowleveldesign.splitwise.exception;
  * don't add up to the total expense amount, or PERCENT splits don't add
  * up to 100%.
  */
-public class InvalidSplitException extends RuntimeException {
+public class InvalidSplitException extends SplitwiseException {
     public InvalidSplitException(String message) {
         super(message);
     }

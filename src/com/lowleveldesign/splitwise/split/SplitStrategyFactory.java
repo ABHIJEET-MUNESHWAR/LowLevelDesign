@@ -1,5 +1,6 @@
 package com.lowleveldesign.splitwise.split;
 
+import com.lowleveldesign.splitwise.exception.UnsupportedSplitTypeException;
 import com.lowleveldesign.splitwise.model.SplitType;
 
 /**
@@ -11,6 +12,9 @@ public final class SplitStrategyFactory {
     }
 
     public static SplitStrategy getStrategy(SplitType type) {
+        if (type == null) {
+            throw new UnsupportedSplitTypeException(null);
+        }
         switch (type) {
             case EQUAL:
                 return new EqualSplitStrategy();
@@ -19,7 +23,7 @@ public final class SplitStrategyFactory {
             case PERCENT:
                 return new PercentSplitStrategy();
             default:
-                throw new IllegalArgumentException("Unsupported split type: " + type);
+                throw new UnsupportedSplitTypeException(type);
         }
     }
 }
