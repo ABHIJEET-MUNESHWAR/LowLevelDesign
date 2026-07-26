@@ -7,6 +7,12 @@ package com.lowleveldesign.meetingscheduler.exception;
  */
 public class NoRoomAvailableException extends RuntimeException {
 
+    /**
+     * Creates the exception describing the request that could not be satisfied.
+     *
+     * @param message a description including the requested attendee count and time range, so the
+     *                caller can report or retry with different parameters
+     */
     public NoRoomAvailableException(String message) {
         super(message);
     }

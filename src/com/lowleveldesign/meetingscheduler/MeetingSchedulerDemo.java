@@ -18,6 +18,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Runnable worked example: best-fit selection, overlap rejection, and a concurrent race. */
 public final class MeetingSchedulerDemo {
 
+    /**
+     * Runs the worked example end to end: best-fit selection, spillover into a larger room,
+     * non-overlapping re-use of the same room, rejection when nothing fits, cancellation, and
+     * finally a concurrent race.
+     *
+     * @param args ignored
+     * @throws Exception if a worker thread in the concurrency demo fails
+     */
     public static void main(String[] args) throws Exception {
         List<Room> rooms = Arrays.asList(
                 new Room("R1", "Falcon (Small)", 6),
@@ -68,6 +76,12 @@ public final class MeetingSchedulerDemo {
      * Fires many concurrent requests for the *same* room and the *same* time slot. Only one
      * should ever win; every other thread must receive a clean rejection with no corruption of
      * the room's booking calendar.
+     *
+     * <p>This is the practical demonstration that per-room locking makes the overlap check and the
+     * insertion atomic -- without it, several threads could each observe a free slot and all book
+     * it.
+     *
+     * @throws Exception if a worker thread fails or the pool is interrupted while shutting down
      */
     private static void concurrentRaceDemo() throws Exception {
         System.out.println("\n--- Concurrent race for one room/slot ---");

@@ -24,8 +24,9 @@ Booking confirmed | Room: Hawk (Large) | Capacity: 20 | Attendees: 16 | Start: 2
    - [Class Diagram](#class-diagram)
    - [Sequence Diagram](#sequence-diagram)
    - [Activity Diagram](#activity-diagram)
-5. [Design Patterns](#design-patterns)
-6. [Extending the Design](#extending-the-design)
+5. [Data Structures and Complexity](#data-structures-and-complexity)
+6. [Design Patterns](#design-patterns)
+7. [Extending the Design](#extending-the-design)
 
 ---
 
@@ -179,10 +180,12 @@ classDiagram
 
     class MeetingRoomBookingService {
         -roomsByCapacityAscending List~Room~
+        -capacitiesAscending int[]
         -roomsById Map~String, Room~
         -bookingIdToRoomId Map~String, String~
         +bookRoom(attendeeCount int, start LocalDateTime, end LocalDateTime) String
         +cancelBooking(bookingId String) boolean
+        -firstRoomFitting(attendeeCount int) int
         -printConfirmation(booking Booking) void
     }
 
@@ -192,6 +195,7 @@ classDiagram
         -capacity int
         -lock ReentrantLock
         -bookings TreeMap~LocalDateTime, Booking~
+        -bookingIdToStart Map~String, LocalDateTime~
         +tryBook(attendeeCount int, slot TimeSlot) Optional~Booking~
         +cancel(bookingId String) boolean
         -hasOverlap(slot TimeSlot) boolean
@@ -303,15 +307,13 @@ flowchart TD
     Validate -- No --> Invalid[Throw InvalidBookingRequestException]
     Invalid --> End1([End])
 
-    Validate -- Yes --> NextRoom[Pick next room in capacity-ascending order]
-    NextRoom --> HasNext{Any room left to try?}
+    Validate -- Yes --> Locate[Binary search: first room with capacity >= attendeeCount]
+    Locate --> NextRoom[Take next candidate room in capacity-ascending order]
+    NextRoom --> HasNext{Any eligible room left to try?}
     HasNext -- No --> NoRoom[Throw NoRoomAvailableException]
     NoRoom --> End2([End])
 
-    HasNext -- Yes --> CapacityCheck{room.capacity >= attendeeCount?}
-    CapacityCheck -- No --> NextRoom
-
-    CapacityCheck -- Yes --> AcquireLock[Acquire room's lock]
+    HasNext -- Yes --> AcquireLock[Acquire room's lock]
     AcquireLock --> OverlapCheck{Overlaps existing booking?}
     OverlapCheck -- Yes --> ReleaseLock1[Release lock]
     ReleaseLock1 --> NextRoom
@@ -323,6 +325,31 @@ flowchart TD
     Print --> Success[Return bookingId to caller]
     Success --> End3([End])
 ```
+
+---
+
+## Data Structures and Complexity
+
+Notation: **R** = number of rooms, **n** = bookings held by one room, **B** = total bookings.
+
+| Structure | Choice | Time | Space | Why this and not something else |
+|---|---|---|---|---|
+| `Room.bookings` | `TreeMap<LocalDateTime, Booking>` | O(log n) overlap check, insert, remove | O(n) | The core operation is a **range/neighbour query**, which is exactly what a sorted map does well. A `HashMap` can't answer "what booking is nearest this time" at all; an `ArrayList` would make every overlap check an O(n) scan. Since existing bookings are non-overlapping by construction, only the `floorEntry` and `ceilingEntry` around the candidate start can possibly conflict — so two O(log n) probes settle it, no matter how full the calendar is. |
+| `Room.bookingIdToStart` | `HashMap<String, LocalDateTime>` | O(1) lookup, so cancel is O(log n) | O(n) | Without it, cancellation had to scan the whole calendar to find a booking by ID — O(n). This secondary index trades one extra pointer per booking for an order-of-magnitude better cancel. Both maps are mutated in the same critical section, so they cannot drift apart. |
+| `MeetingRoomBookingService.roomsByCapacityAscending` + `capacitiesAscending` | `ArrayList<Room>` sorted once + parallel `int[]` | O(log R) to find the first eligible room | O(R) | Sorting once at construction keeps it off the hot path. The parallel primitive array allows a **binary search (lower bound)** for the smallest sufficient capacity, so a 16-person request never walks past the small rooms. The `int[]` also avoids `Integer` boxing on every comparison. |
+| `bookingIdToRoomId`, `roomsById` | `ConcurrentHashMap` | O(1) | O(B), O(R) | Cancellation needs to route an ID to its owning room without touching every room. These are the only structures shared across threads outside a room's lock, so they must be concurrent; they're only ever `put`/`remove`/`get`, never compound read-modify-write, so `ConcurrentHashMap` alone is sufficient. |
+| `Room.lock` | one `ReentrantLock` per room | — | O(R) | Per-room rather than one global lock, so N threads booking N different rooms never contend. See the concurrency notes above. |
+
+**Resulting cost of a booking:** O(log R) to locate the first eligible room, then O(log n) per room
+actually probed. Best case (the smallest fitting room is free) is **O(log R + log n)**. The worst
+case is O(log R + k·log n) where k is the number of eligible rooms that turn out to be busy —
+unavoidable for a best-fit policy, since "is a closer-fitting room free?" can only be answered by
+asking. Cancellation is **O(1) + O(log n)**. Total space is **O(R + B)**.
+
+**Known trade-off:** the room lock is held for the whole check-and-insert, so two bookings on the
+*same* room but completely unrelated days still serialize. That's a deliberate simplicity choice at
+this scale; [Extending the Design](#extending-the-design) describes the striped/interval-tree
+locking that would remove it.
 
 ---
 
