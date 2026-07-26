@@ -12,6 +12,7 @@ LOOK/SCAN algorithm.
    - [strategy](#strategy)
    - [controller](#controller)
    - [demo](#demo)
+   - [test](#test)
 3. [Flow of the System](#flow-of-the-system)
 4. [Diagrams](#diagrams)
    - [Use Case Diagram](#use-case-diagram)
@@ -19,7 +20,8 @@ LOOK/SCAN algorithm.
    - [Sequence Diagram](#sequence-diagram)
    - [Activity Diagram](#activity-diagram)
 5. [Design Patterns Used](#design-patterns-used)
-6. [Extending the Design](#extending-the-design)
+6. [Testing](#testing)
+7. [Extending the Design](#extending-the-design)
    - [More Scheduling Strategies](#more-scheduling-strategies)
    - [Multithreading](#multithreading)
    - [Concurrency](#concurrency)
@@ -92,6 +94,12 @@ exposes the public API a building's panels would call into.
 | Class | Responsibility |
 |---|---|
 | `ElevatorSystemDemo` | `main()` entry point. Builds a `Building`, submits a couple of hall calls and destination calls, then loops calling `stepAll()` until every elevator is idle — printing floor-by-floor movement, door events, and the final state of each elevator. |
+
+### test
+
+| Class | Responsibility |
+|---|---|
+| `TestRunner` | Dependency-free unit test suite (no JUnit/build tool required, consistent with `com.lowleveldesign.meetingscheduler.test.TestRunner`). Covers `Request`, `Door`, `Display`, `Elevator` (LOOK ordering, direction reversal, idle transitions, listener timing), `NearestElevatorStrategy`, `ElevatorController`, and `Building`. See [Testing](#testing) for how to run it. |
 
 ## Flow of the System
 
@@ -414,6 +422,49 @@ flowchart TD
 | **State (implicit, via enums)** | `ElevatorState`, `DoorState`, `Direction` | Rather than a full State pattern with polymorphic classes, lightweight enums represent the finite states of an elevator/door. This keeps the object graph simple while still making illegal states (e.g. "moving" with no direction) easy to guard against, appropriate since transition logic is small and centralized in `Elevator`. |
 | **Immutable Value Object** | `Request` | Once a request is created it never changes — floor, direction and type are `final`. Immutability makes requests safe to pass around, hash/compare (`equals`/`hashCode`), and reason about without defensive copying. |
 | **Observer** | `ElevatorListener` / `Elevator.addListener(...)` | A destination request is only physically valid *after* a passenger has boarded, which happens the moment the doors open at their pickup floor. `Elevator` notifies registered `ElevatorListener`s from `openDoorAt()`, letting callers react to that exact moment instead of guessing timing — this is what prevents a destination floor from being served before the corresponding pickup. |
+
+## Testing
+
+`com.lowleveldesign.elevator.test.TestRunner` is a dependency-free unit test
+suite (29 tests) — no JUnit, Maven or Gradle required, matching the existing
+convention in this repository.
+
+**Run from the repository root:**
+
+```bash
+javac -d out $(find src/com/lowleveldesign/elevator -name "*.java")
+java -cp out com.lowleveldesign.elevator.test.TestRunner
+```
+
+PowerShell equivalent:
+
+```powershell
+$files = Get-ChildItem -Recurse src\com\lowleveldesign\elevator -Filter *.java | % FullName
+javac -d out $files
+java -cp out com.lowleveldesign.elevator.test.TestRunner
+```
+
+It prints `[PASS]`/`[FAIL]` per test and exits non-zero if anything fails, so
+it can be dropped into CI as-is.
+
+**Coverage by area:**
+
+| Area | What is verified |
+|---|---|
+| `Request` | `externalRequest` rejects an `IDLE` direction; both factories populate floor/direction/type correctly; `equals`/`hashCode` contract; `toString` distinguishes hall calls from destinations. |
+| `Door` / `Display` | Door starts `CLOSED` and transitions correctly on `open()`/`close()`; display always reflects the most recent `update()`. |
+| `Elevator` (LOOK/SCAN) | Correct initial state; a same-floor stop opens the door immediately; multiple stops are served in ascending LOOK order; the elevator **reverses** direction rather than idling when the opposite queue still has stops; returns to `IDLE` once drained; `distanceTo`, `hasPendingRequests`, `isIdle`, `getCapacity`. |
+| Listener timing | The listener fires **only on arrival**, never on intermediate floors — plus a dedicated regression test (`testNoDropOffBeforeBoarding`) asserting a destination floor is never queued or served before the pickup floor is reached. |
+| `NearestElevatorStrategy` | Prefers the closest idle elevator; prefers an elevator already travelling toward the request over a farther idle one; penalizes an elevator moving away/opposite. |
+| `ElevatorController` | No-arg `getInstance()` throws before initialization; the singleton returns the same shared instance (and ignores later constructor args); hall requests dispatch and return the chosen elevator; destination requests queue on the target elevator; unknown elevator id throws; `stepAll()` advances only busy elevators; `setSchedulingStrategy()` genuinely swaps the dispatch algorithm. |
+| `Building` | `validateFloor` rejects floors `< 0` and `>= numberOfFloors`; both `submitHallRequest` and `submitDestinationRequest` enforce those bounds before dispatching. |
+
+> **Note on testing a Singleton:** because `ElevatorController` caches a
+> private static `instance`, each test needs a clean slate. Rather than adding
+> a production-only `reset()` method that exists solely for tests, the runner
+> clears that field reflectively between test cases — keeping the production
+> API honest while still allowing isolated tests. This is a good illustration
+> of the testability trade-off the Singleton pattern imposes.
 
 ## Extending the Design
 
