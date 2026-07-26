@@ -1,6 +1,7 @@
 package com.lowleveldesign.meetingscheduler.service;
 
 import com.lowleveldesign.meetingscheduler.exception.InvalidBookingRequestException;
+import com.lowleveldesign.meetingscheduler.exception.InvalidRoomConfigurationException;
 import com.lowleveldesign.meetingscheduler.exception.NoRoomAvailableException;
 import com.lowleveldesign.meetingscheduler.model.Booking;
 import com.lowleveldesign.meetingscheduler.model.Room;
@@ -48,12 +49,13 @@ public final class MeetingRoomBookingService implements BookingService {
      *
      * @param rooms the rooms this service can allocate; copied defensively, so later changes to the
      *              caller's list do not affect the service
-     * @throws IllegalArgumentException if {@code rooms} is {@code null} or empty, since a booking
-     *                                  service with no inventory could never succeed
+     * @throws InvalidRoomConfigurationException if {@code rooms} is {@code null} or empty, since a
+     *                                            booking service with no inventory could never
+     *                                            succeed
      */
     public MeetingRoomBookingService(List<Room> rooms) {
         if (rooms == null || rooms.isEmpty()) {
-            throw new IllegalArgumentException("At least one room is required");
+            throw new InvalidRoomConfigurationException("At least one room is required");
         }
         List<Room> sorted = new ArrayList<>(rooms);
         sorted.sort(Comparator.comparingInt(Room::getCapacity));

@@ -1,6 +1,7 @@
 package com.lowleveldesign.meetingscheduler.test;
 
 import com.lowleveldesign.meetingscheduler.exception.InvalidBookingRequestException;
+import com.lowleveldesign.meetingscheduler.exception.InvalidRoomConfigurationException;
 import com.lowleveldesign.meetingscheduler.exception.NoRoomAvailableException;
 import com.lowleveldesign.meetingscheduler.model.Booking;
 import com.lowleveldesign.meetingscheduler.model.Room;
@@ -41,6 +42,7 @@ public final class TestRunner {
         run("throws when no room is large enough", TestRunner::testNoRoomLargeEnough);
         run("throws on invalid time range", TestRunner::testInvalidRange);
         run("cancellation frees the slot for re-booking", TestRunner::testCancellation);
+        run("rejects null or empty room inventory at construction", TestRunner::testInvalidRoomConfiguration);
         run("booking carries room name, capacity, attendees and slot", TestRunner::testBookingDetails);
         run("best-fit boundary: exact-capacity and off-by-one requests", TestRunner::testCapacityBoundary);
         run("only one winner among concurrent racers for the same slot", TestRunner::testConcurrentRace);
@@ -249,6 +251,29 @@ public final class TestRunner {
         String rebookedId = service.bookRoom(4, start, end);
         assertTrue(rebookedId != null, "Slot should be re-bookable after cancellation");
         assertTrue(!service.cancelBooking("does-not-exist"), "Cancelling an unknown ID should return false");
+        return null;
+    }
+
+    /**
+     * Verifies that constructing a service with no rooms at all -- a {@code null} list or an empty
+     * one -- fails fast with a configuration-specific exception rather than a generic one, and
+     * distinct from the per-request {@link InvalidBookingRequestException}.
+     *
+     * @return always {@code null}; the method signature satisfies {@link Callable}
+     */
+    private static Void testInvalidRoomConfiguration() {
+        try {
+            new MeetingRoomBookingService(null);
+            throw new AssertionError("Expected InvalidRoomConfigurationException for a null room list");
+        } catch (InvalidRoomConfigurationException expected) {
+            // expected
+        }
+        try {
+            new MeetingRoomBookingService(new ArrayList<>());
+            throw new AssertionError("Expected InvalidRoomConfigurationException for an empty room list");
+        } catch (InvalidRoomConfigurationException expected) {
+            // expected
+        }
         return null;
     }
 

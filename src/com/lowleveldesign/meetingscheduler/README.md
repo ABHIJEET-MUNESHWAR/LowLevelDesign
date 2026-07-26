@@ -41,8 +41,9 @@ meetingscheduler/
 │   ├── Booking.java           Immutable confirmed-reservation receipt
 │   └── Room.java              A room: capacity + its own lock + its own calendar
 ├── exception/
-│   ├── InvalidBookingRequestException.java   Bad input (capacity <= 0, end <= start)
-│   └── NoRoomAvailableException.java         No eligible room is free
+│   ├── InvalidBookingRequestException.java     Bad input (capacity <= 0, end <= start)
+│   ├── InvalidRoomConfigurationException.java  Service built with a null/empty room inventory
+│   └── NoRoomAvailableException.java           No eligible room is free
 ├── service/
 │   ├── BookingService.java                 Facade interface (bookRoom / cancelBooking)
 │   └── MeetingRoomBookingService.java      Best-fit room selection + orchestration
@@ -55,10 +56,10 @@ meetingscheduler/
   ending at 10:00 does not conflict with one starting at 10:00. Validates `end > start` in its
   constructor so an invalid slot can never be constructed. `overlaps()` is the single source of
   truth for "do two intervals conflict."
-- **`Booking`** — an immutable receipt: ID, room ID/name, **room capacity**, attendee count, the
-  `TimeSlot`, and a timestamp. Returned to the caller as proof of a confirmed reservation; never
-  mutated after creation. Carrying the room capacity on the receipt makes it self-describing, so
-  the confirmation printout needs no lookup back into `Room`.
+- **`Booking`** — an immutable receipt: ID, room ID/name, **room capacity**, attendee count, and the
+  `TimeSlot`. Returned to the caller as proof of a confirmed reservation; never mutated after
+  creation. Carrying the room capacity on the receipt makes it self-describing, so the confirmation
+  printout needs no lookup back into `Room`.
 - **`Room`** — the unit of concurrency control. Each `Room` owns a private `ReentrantLock` and a
   `TreeMap<LocalDateTime, Booking>` keyed by booking start time. All reads/writes of that map
   happen only while holding the room's own lock. Because a room's existing bookings are always
@@ -68,12 +69,16 @@ meetingscheduler/
   scan.
 
 ### `exception`
-Both extend `RuntimeException` (unchecked) — a booking failure is an expected, recoverable
+All three extend `RuntimeException` (unchecked) — a booking failure is an expected, recoverable
 business outcome, not a programming error, and callers shouldn't be forced to catch it if they
 don't care (e.g., a batch job that just logs and moves on).
 - **`InvalidBookingRequestException`** — malformed request (non-positive capacity, `end <= start`).
 - **`NoRoomAvailableException`** — every capacity-eligible room is booked for the requested slot,
   or no room is large enough at all.
+- **`InvalidRoomConfigurationException`** — the service was constructed with a `null` or empty room
+  inventory. Kept distinct from the other two because it is a setup-time configuration error, not a
+  per-request failure -- callers may reasonably want to fail fast at startup for this one while
+  handling the per-request exceptions per call (e.g., as an HTTP 4xx response).
 
 ### `service`
 - **`BookingService`** — the public contract: `bookRoom(attendeeCount, start, end) -> bookingId`
@@ -216,7 +221,6 @@ classDiagram
         -roomCapacity int
         -attendeeCount int
         -timeSlot TimeSlot
-        -bookedAt LocalDateTime
     }
 
     class InvalidBookingRequestException {
@@ -227,12 +231,17 @@ classDiagram
         <<RuntimeException>>
     }
 
+    class InvalidRoomConfigurationException {
+        <<RuntimeException>>
+    }
+
     BookingService <|.. MeetingRoomBookingService : implements
     MeetingRoomBookingService "1" o-- "many" Room : orchestrates
     Room "1" *-- "many" Booking : owns (guarded by its lock)
     Booking "1" --> "1" TimeSlot : has
     MeetingRoomBookingService ..> NoRoomAvailableException : throws
     MeetingRoomBookingService ..> InvalidBookingRequestException : throws (via TimeSlot)
+    MeetingRoomBookingService ..> InvalidRoomConfigurationException : throws (constructor)
     TimeSlot ..> InvalidBookingRequestException : throws
 ```
 
@@ -361,7 +370,7 @@ locking that would remove it.
 | `Room` | **Monitor Object** | Each `Room` bundles the state it protects (its booking calendar) together with the lock that guards it (`ReentrantLock`) and only exposes synchronized operations (`tryBook`, `cancel`). Callers can never touch the calendar without going through the lock, which is what makes the "no overlapping bookings" invariant impossible to violate by mistake. |
 | `TimeSlot`, `Booking` | **Immutable Value Object** | Both are plain data with no setters and are fully constructed (and validated) in their constructor. Immutability means a `Booking`, once handed back to a caller or stored in a room's calendar, can never be silently corrupted by another thread — this is what lets `Room` share `Booking` references across threads without extra copying or locking. |
 | `Room.tryBook` returning `Optional<Booking>` | **Special Case / Null Object (via `Optional`)** | "No room available right now" is a normal, expected outcome, not an error at the `Room` level (the error is only raised once *every* candidate room has been tried, in the service). Returning `Optional.empty()` avoids null checks and makes "did it work?" explicit at the call site. |
-| `InvalidBookingRequestException`, `NoRoomAvailableException` | **Domain-Specific Exception (Unchecked)** | Two distinct failure modes (bad input vs. no capacity) get distinct types so callers can `catch` selectively; both are unchecked because a full room is an expected business condition a caller may reasonably choose not to handle explicitly (e.g., letting it propagate to an HTTP 409 handler). |
+| `InvalidBookingRequestException`, `NoRoomAvailableException`, `InvalidRoomConfigurationException` | **Domain-Specific Exception (Unchecked)** | Three distinct failure modes (bad per-request input, no capacity, bad service setup) get distinct types so callers can `catch` selectively; all are unchecked because each is an expected business condition a caller may reasonably choose not to handle explicitly (e.g., letting a per-request failure propagate to an HTTP 4xx handler, or a configuration failure crash the app at startup). |
 | Capacity-ascending room list + iteration in `bookRoom` | **Strategy (embedded)** | The "try smallest sufficient room first" rule is the room-selection strategy. It currently lives inline in `MeetingRoomBookingService` rather than behind a separate interface because there is only one strategy today — see below for how to promote it to a first-class `Strategy` pattern when a second policy is needed. |
 | `MeetingRoomBookingService`'s `bookingIdToRoomId` / `roomsById` maps | **(Lightweight) Repository** | Provides O(1) lookup from a booking ID back to its owning room for cancellation, so the service doesn't need to linearly scan every room's calendar. |
 

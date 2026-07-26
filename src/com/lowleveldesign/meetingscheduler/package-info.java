@@ -11,9 +11,9 @@
  *   <li>{@code model}     -- value objects: {@code TimeSlot} (a half-open time range), {@code Booking}
  *                            (an immutable receipt), and {@code Room} (capacity + its own lock and
  *                            booking calendar).</li>
- *   <li>{@code exception} -- {@code NoRoomAvailableException} and
- *                            {@code InvalidBookingRequestException}, both unchecked so callers opt in
- *                            to handling them.</li>
+ *   <li>{@code exception} -- {@code NoRoomAvailableException}, {@code InvalidBookingRequestException},
+ *                            and {@code InvalidRoomConfigurationException}, all unchecked so
+ *                            callers opt in to handling them.</li>
  *   <li>{@code service}   -- {@code BookingService} facade and its single implementation,
  *                            {@code MeetingRoomBookingService}.</li>
  *   <li>{@code test}      -- dependency-free correctness and concurrency tests

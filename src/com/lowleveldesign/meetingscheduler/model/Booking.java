@@ -1,7 +1,5 @@
 package com.lowleveldesign.meetingscheduler.model;
 
-import java.time.LocalDateTime;
-
 /**
  * An immutable receipt for a confirmed reservation. Returned to the caller as proof that a room
  * was reserved for a given slot; carries the booking ID that identifies it for later lookup or
@@ -15,7 +13,6 @@ public final class Booking {
     private final int roomCapacity;
     private final int attendeeCount;
     private final TimeSlot timeSlot;
-    private final LocalDateTime bookedAt;
 
     /**
      * Creates a confirmed booking receipt.
@@ -40,7 +37,6 @@ public final class Booking {
         this.roomCapacity = roomCapacity;
         this.attendeeCount = attendeeCount;
         this.timeSlot = timeSlot;
-        this.bookedAt = LocalDateTime.now();
     }
 
     /**
@@ -98,18 +94,6 @@ public final class Booking {
      */
     public TimeSlot getTimeSlot() {
         return timeSlot;
-    }
-
-    /**
-     * Returns when this booking was created.
-     *
-     * <p>This is the wall-clock time the reservation was made, not the time of the meeting itself;
-     * it is useful for auditing and for ordering competing bookings after the fact.
-     *
-     * @return the creation timestamp of this receipt
-     */
-    public LocalDateTime getBookedAt() {
-        return bookedAt;
     }
 
     /**

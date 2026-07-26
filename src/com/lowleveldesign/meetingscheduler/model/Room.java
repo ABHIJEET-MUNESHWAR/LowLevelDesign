@@ -58,15 +58,6 @@ public final class Room {
     }
 
     /**
-     * Returns this room's display name.
-     *
-     * @return the human-readable name shown in booking confirmations
-     */
-    public String getName() {
-        return name;
-    }
-
-    /**
      * Returns the maximum number of attendees this room can seat.
      *
      * <p>Read by the service to order and filter candidate rooms for best-fit selection. It is safe
