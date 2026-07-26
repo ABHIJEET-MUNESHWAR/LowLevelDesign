@@ -15,6 +15,11 @@ import java.util.List;
  */
 public class Main {
 
+    /**
+     * Runs the Splitwise demonstration scenario.
+     *
+     * @param args command-line arguments (unused)
+     */
     public static void main(String[] args) {
         SplitwiseService splitwise = new SplitwiseService();
 

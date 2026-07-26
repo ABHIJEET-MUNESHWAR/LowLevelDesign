@@ -13,6 +13,16 @@ public class PercentSplitStrategy implements SplitStrategy {
 
     private static final double EPSILON = 0.01;
 
+    /**
+     * Validates that the participants' percentages sum to 100 (within
+     * {@link #EPSILON}) and computes each participant's amount as a
+     * percentage of {@code totalAmount}.
+     *
+     * @param totalAmount the total amount to split
+     * @param splits      the participants with pre-set percentages
+     * @throws InvalidSplitException if {@code splits} is null/empty, any
+     *                               percent is missing, or percentages don't sum to 100
+     */
     @Override
     public void validateAndCompute(double totalAmount, List<Split> splits) {
         if (splits == null || splits.isEmpty()) {

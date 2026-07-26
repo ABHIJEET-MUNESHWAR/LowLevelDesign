@@ -5,6 +5,11 @@ package com.lowleveldesign.splitwise.exception;
  * a user trying to settle up with themselves.
  */
 public class InvalidSettlementException extends SplitwiseException {
+
+    private static final long serialVersionUID = 1L;
+    /**
+     * @param message description of why the settlement is invalid
+     */
     public InvalidSettlementException(String message) {
         super(message);
     }

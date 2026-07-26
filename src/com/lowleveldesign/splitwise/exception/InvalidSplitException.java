@@ -6,6 +6,11 @@ package com.lowleveldesign.splitwise.exception;
  * up to 100%.
  */
 public class InvalidSplitException extends SplitwiseException {
+
+    private static final long serialVersionUID = 1L;
+    /**
+     * @param message description of why the split input is invalid
+     */
     public InvalidSplitException(String message) {
         super(message);
     }

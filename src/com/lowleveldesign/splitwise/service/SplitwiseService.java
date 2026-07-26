@@ -31,6 +31,13 @@ public class SplitwiseService {
     private final Map<String, Group> groups = new HashMap<>();
     private final BalanceSheet balanceSheet = new BalanceSheet();
 
+    /**
+     * Registers a new user so they can participate in expenses and groups.
+     *
+     * @param user the user to register
+     * @throws InvalidExpenseException     if {@code user} is null
+     * @throws UserAlreadyExistsException  if a user with the same id is already registered
+     */
     public void registerUser(User user) {
         if (user == null) {
             throw new InvalidExpenseException("User must not be null");
@@ -41,6 +48,15 @@ public class SplitwiseService {
         users.put(user.getId(), user);
     }
 
+    /**
+     * Creates a group from previously registered members.
+     *
+     * @param name    display name of the group
+     * @param members the group's members (all must already be registered)
+     * @return the newly created group
+     * @throws InvalidExpenseException if the name is blank or the member list is empty
+     * @throws UserNotFoundException   if any member is not registered
+     */
     public Group createGroup(String name, List<User> members) {
         if (name == null || name.trim().isEmpty()) {
             throw new InvalidExpenseException("Group name must not be empty");
@@ -57,6 +73,12 @@ public class SplitwiseService {
         return group;
     }
 
+    /**
+     * Ensures the given user has been registered with this service.
+     *
+     * @param user the user to check
+     * @throws UserNotFoundException if the user is null or not registered
+     */
     private void requireRegistered(User user) {
         if (user == null) {
             throw new UserNotFoundException("null");
@@ -67,14 +89,19 @@ public class SplitwiseService {
     }
 
     /**
-     * Adds a standalone expense (not tied to a group) and updates the
-     * balance sheet accordingly.
+     * Adds a standalone expense (not tied to a group), validates it via the
+     * appropriate {@link SplitStrategy}, and updates the balance sheet so the
+     * payer is owed each participant's share.
      *
      * @param description description of the expense
-     * @param amount      total amount of the expense
-     * @param paidBy      user who paid the bill
+     * @param amount      total amount of the expense (must be positive)
+     * @param paidBy      user who paid the bill (must be registered)
      * @param splits      participants' shares (see {@link Split} factory methods)
      * @param splitType   how the amount should be split
+     * @return the created {@link Expense}
+     * @throws InvalidExpenseException if the amount is non-positive or there are no participants
+     * @throws UserNotFoundException   if the payer or any participant is not registered
+     * @throws com.lowleveldesign.splitwise.exception.InvalidSplitException if the splits are inconsistent with the amount
      */
     public Expense addExpense(String description, double amount, User paidBy, List<Split> splits, SplitType splitType) {
         if (amount <= 0) {
@@ -100,7 +127,21 @@ public class SplitwiseService {
         return expense;
     }
 
-    /** Adds an expense and also records it against the given group's history. */
+    /**
+     * Adds an expense within a group: verifies the group exists and that the
+     * payer and every participant are members, then delegates to
+     * {@link #addExpense} and records the expense in the group's history.
+     *
+     * @param group       the group the expense belongs to
+     * @param description description of the expense
+     * @param amount      total amount of the expense
+     * @param paidBy      user who paid the bill
+     * @param splits      participants' shares
+     * @param splitType   how the amount should be split
+     * @return the created {@link Expense}
+     * @throws GroupNotFoundException   if the group is null or unknown
+     * @throws UserNotInGroupException  if the payer or any participant is not a member of the group
+     */
     public Expense addExpenseToGroup(Group group, String description, double amount, User paidBy,
                                       List<Split> splits, SplitType splitType) {
         if (group == null || !groups.containsKey(group.getId())) {
@@ -117,13 +158,29 @@ public class SplitwiseService {
         return expense;
     }
 
+    /**
+     * Ensures the given user is a member of the group.
+     *
+     * @param group the group to check membership in
+     * @param user  the user that must be a member
+     * @throws UserNotInGroupException if the user is null or not a member
+     */
     private void requireGroupMember(Group group, User user) {
         if (user == null || !group.getMembers().contains(user)) {
             throw new UserNotInGroupException(user == null ? "null" : user.getId(), group.getName());
         }
     }
 
-    /** Records a cash settlement: {@code payer} pays {@code payee} the given amount. */
+    /**
+     * Records a cash settlement in which {@code payer} pays {@code payee},
+     * reducing what the payer owes the payee by {@code amount}.
+     *
+     * @param payer  the user making the payment (must be registered)
+     * @param payee  the user receiving the payment (must be registered)
+     * @param amount the amount being settled (must be positive)
+     * @throws UserNotFoundException       if either user is not registered
+     * @throws InvalidSettlementException  if the users are the same or the amount is non-positive
+     */
     public void settleUp(User payer, User payee, double amount) {
         requireRegistered(payer);
         requireRegistered(payee);
@@ -136,6 +193,12 @@ public class SplitwiseService {
         balanceSheet.settle(payer, payee, amount);
     }
 
+    /**
+     * Prints every non-zero balance involving the given user to standard out,
+     * resolving counterparty ids to display names.
+     *
+     * @param user the user whose balances should be printed
+     */
     public void showBalances(User user) {
         Map<String, Double> nonZero = balanceSheet.getNonZeroBalances(user);
         if (nonZero.isEmpty()) {
@@ -153,6 +216,7 @@ public class SplitwiseService {
         });
     }
 
+    /** Prints the balances of every registered user to standard out. */
     public void showAllBalances() {
         users.values().forEach(this::showBalances);
     }
@@ -161,7 +225,10 @@ public class SplitwiseService {
      * Simplifies debts among a group's members so that the number of
      * transactions required to settle everyone up is minimized. Uses a
      * greedy approach: repeatedly match the biggest creditor with the
-     * biggest debtor.
+     * biggest debtor. The resulting settlement plan is printed to standard out.
+     *
+     * @param group the group whose debts should be simplified
+     * @throws GroupNotFoundException if the group is null or unknown
      */
     public void simplifyGroupDebts(Group group) {
         if (group == null || !groups.containsKey(group.getId())) {

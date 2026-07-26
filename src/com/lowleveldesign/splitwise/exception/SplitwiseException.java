@@ -8,10 +8,23 @@ package com.lowleveldesign.splitwise.exception;
  */
 public class SplitwiseException extends RuntimeException {
 
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Creates the exception with a detail message.
+     *
+     * @param message description of the violation
+     */
     public SplitwiseException(String message) {
         super(message);
     }
 
+    /**
+     * Creates the exception with a detail message and underlying cause.
+     *
+     * @param message description of the violation
+     * @param cause   the underlying cause
+     */
     public SplitwiseException(String message, Throwable cause) {
         super(message, cause);
     }

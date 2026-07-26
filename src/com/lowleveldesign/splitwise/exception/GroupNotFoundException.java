@@ -5,6 +5,11 @@ package com.lowleveldesign.splitwise.exception;
  * {@code SplitwiseService}.
  */
 public class GroupNotFoundException extends SplitwiseException {
+
+    private static final long serialVersionUID = 1L;
+    /**
+     * @param groupId the id of the group that could not be found
+     */
     public GroupNotFoundException(String groupId) {
         super("No group found with id: " + groupId);
     }

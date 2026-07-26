@@ -11,6 +11,13 @@ public final class SplitStrategyFactory {
     private SplitStrategyFactory() {
     }
 
+    /**
+     * Returns the {@link SplitStrategy} that implements the given split type.
+     *
+     * @param type the split type to resolve
+     * @return a strategy instance for {@code type}
+     * @throws UnsupportedSplitTypeException if {@code type} is {@code null} or has no implementation
+     */
     public static SplitStrategy getStrategy(SplitType type) {
         if (type == null) {
             throw new UnsupportedSplitTypeException(null);

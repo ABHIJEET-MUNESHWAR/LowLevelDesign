@@ -13,6 +13,15 @@ public class ExactSplitStrategy implements SplitStrategy {
 
     private static final double EPSILON = 0.01;
 
+    /**
+     * Validates that the caller-supplied exact amounts add up to
+     * {@code totalAmount} (within {@link #EPSILON}); no amounts are modified.
+     *
+     * @param totalAmount the expected total of all shares
+     * @param splits      the participants with pre-set exact amounts
+     * @throws InvalidSplitException if {@code splits} is null/empty or the
+     *                               amounts don't sum to {@code totalAmount}
+     */
     @Override
     public void validateAndCompute(double totalAmount, List<Split> splits) {
         if (splits == null || splits.isEmpty()) {

@@ -12,6 +12,15 @@ import java.util.List;
  */
 public class EqualSplitStrategy implements SplitStrategy {
 
+    /**
+     * Divides {@code totalAmount} evenly across all participants, assigning
+     * any rounding remainder to the first participant so the shares sum to
+     * exactly {@code totalAmount}.
+     *
+     * @param totalAmount the total amount to split
+     * @param splits      the participants whose amounts will be filled in
+     * @throws InvalidSplitException if {@code splits} is null or empty
+     */
     @Override
     public void validateAndCompute(double totalAmount, List<Split> splits) {
         if (splits == null || splits.isEmpty()) {
