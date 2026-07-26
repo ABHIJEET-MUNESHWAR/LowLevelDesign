@@ -222,6 +222,20 @@ public class SplitwiseService {
     }
 
     /**
+     * Returns the balance between two users.
+     *
+     * @param a the reference user (must be registered)
+     * @param b the counterparty (must be registered)
+     * @return the amount {@code b} owes {@code a}; negative means {@code a} owes {@code b}
+     * @throws UserNotFoundException if either user is not registered
+     */
+    public double getBalance(User a, User b) {
+        requireRegistered(a);
+        requireRegistered(b);
+        return balanceSheet.getBalance(a, b);
+    }
+
+    /**
      * Simplifies debts among a group's members so that the number of
      * transactions required to settle everyone up is minimized. Uses a
      * greedy approach: repeatedly match the biggest creditor with the

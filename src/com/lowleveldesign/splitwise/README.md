@@ -235,6 +235,7 @@ classDiagram
         +addExpense(...) Expense
         +addExpenseToGroup(...) Expense
         +settleUp(User, User, double)
+        +getBalance(User, User) double
         +showBalances(User)
         +simplifyGroupDebts(Group)
     }
