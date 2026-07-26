@@ -5,6 +5,8 @@ package com.lowleveldesign.elevator.model;
  * INTERNAL  - a destination call raised from inside the elevator cabin.
  */
 public enum RequestType {
+    /** A hall call raised from a floor's UP/DOWN button, outside the cabin. */
     EXTERNAL,
+    /** A destination call raised from a floor button inside the cabin. */
     INTERNAL
 }

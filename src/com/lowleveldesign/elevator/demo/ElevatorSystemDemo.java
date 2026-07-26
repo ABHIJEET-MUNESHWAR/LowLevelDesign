@@ -17,6 +17,13 @@ import com.lowleveldesign.elevator.strategy.NearestElevatorStrategy;
  */
 public class ElevatorSystemDemo {
 
+    /**
+     * Runs the simulation: raises three hall calls, wires each passenger's
+     * destination request to fire only once their elevator arrives, then steps
+     * the bank until every elevator is idle and prints a summary.
+     *
+     * @param args unused
+     */
     public static void main(String[] args) {
         Building building = new Building(10, 2, 8); // 10 floors, 2 elevators, capacity 8
         System.out.printf("Building has %d floors%n", building.getNumberOfFloors());

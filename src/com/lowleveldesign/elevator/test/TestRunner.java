@@ -35,6 +35,13 @@ public final class TestRunner {
     private static int passed = 0;
     private static int failed = 0;
 
+    /**
+     * Runs the full suite, printing a PASS/FAIL line per test and exiting
+     * non-zero if any fail so it can be used directly in CI.
+     *
+     * @param args unused
+     * @throws Exception if the reflective singleton reset fails
+     */
     public static void main(String[] args) throws Exception {
         // --- Request ---
         run("externalRequest rejects IDLE direction", TestRunner::testExternalRequestRejectsIdle);
@@ -88,6 +95,14 @@ public final class TestRunner {
         }
     }
 
+    /**
+     * Executes one test in isolation with a fresh controller singleton,
+     * recording the outcome. Failures are caught so a single broken test never
+     * aborts the rest of the suite.
+     *
+     * @param name human-readable description shown in the output
+     * @param test the test body
+     */
     private static void run(String name, Callable<Void> test) {
         try {
             resetControllerSingleton();
@@ -100,12 +115,26 @@ public final class TestRunner {
         }
     }
 
+    /**
+     * Fails the current test unless the condition holds.
+     *
+     * @param condition the condition that must be true
+     * @param message   explanation reported when it isn't
+     */
     private static void assertTrue(boolean condition, String message) {
         if (!condition) {
             throw new AssertionError(message);
         }
     }
 
+    /**
+     * Fails the current test unless the two values are equal, reporting both
+     * so the mismatch is obvious.
+     *
+     * @param expected the value the test requires
+     * @param actual   the value produced
+     * @param message  explanation reported on mismatch
+     */
     private static void assertEquals(Object expected, Object actual, String message) {
         if (!expected.equals(actual)) {
             throw new AssertionError(message + " (expected=" + expected + ", actual=" + actual + ")");
@@ -117,6 +146,8 @@ public final class TestRunner {
      * isolation - each test needs a fresh instance. Rather than adding a
      * production-only "reset" method purely for tests, reflection is used to
      * clear the private static instance between test cases.
+     *
+     * @throws Exception if the field cannot be accessed reflectively
      */
     private static void resetControllerSingleton() throws Exception {
         Field field = ElevatorController.class.getDeclaredField("instance");

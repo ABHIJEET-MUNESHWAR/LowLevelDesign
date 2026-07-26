@@ -7,5 +7,14 @@ package com.lowleveldesign.elevator.model;
  * their pickup floor - never before.
  */
 public interface ElevatorListener {
+
+    /**
+     * Invoked immediately after an elevator opens its doors at a floor — the
+     * earliest point at which a passenger can be considered boarded, and
+     * therefore the earliest a destination request may legitimately be raised.
+     *
+     * @param elevatorId the elevator that stopped
+     * @param floor      the floor it stopped at
+     */
     void onDoorOpened(int elevatorId, int floor);
 }

@@ -10,6 +10,9 @@ public class InvalidBuildingConfigurationException extends ElevatorException {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * @param message description of which configuration value was invalid
+     */
     public InvalidBuildingConfigurationException(String message) {
         super(message);
     }

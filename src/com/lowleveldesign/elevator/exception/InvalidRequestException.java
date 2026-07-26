@@ -9,6 +9,9 @@ public class InvalidRequestException extends ElevatorException {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * @param message description of why the request is malformed
+     */
     public InvalidRequestException(String message) {
         super(message);
     }

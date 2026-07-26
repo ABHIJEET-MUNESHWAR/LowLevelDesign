@@ -12,6 +12,9 @@ public class ElevatorException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * @param message description of the elevator failure
+     */
     public ElevatorException(String message) {
         super(message);
     }

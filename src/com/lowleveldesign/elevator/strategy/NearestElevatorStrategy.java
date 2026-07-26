@@ -15,6 +15,14 @@ import java.util.List;
  */
 public class NearestElevatorStrategy implements SchedulingStrategy {
 
+    /**
+     * Picks the elevator with the lowest cost for this request, scanning the
+     * whole bank once.
+     *
+     * @param elevators all elevators in the building's bank
+     * @param request   the request needing an assignment
+     * @return the cheapest elevator, or {@code null} if the bank is empty
+     */
     @Override
     public Elevator selectElevator(List<Elevator> elevators, Request request) {
         Elevator best = null;
@@ -30,6 +38,16 @@ public class NearestElevatorStrategy implements SchedulingStrategy {
         return best;
     }
 
+    /**
+     * Scores how suitable an elevator is for a request — lower is better. Idle
+     * cars and cars already heading toward the request score by raw distance;
+     * anything moving away or in the opposite direction gets a large penalty so
+     * it only wins when nothing better exists.
+     *
+     * @param elevator the candidate elevator
+     * @param request  the request being assigned
+     * @return the cost of assigning this elevator
+     */
     private int computeCost(Elevator elevator, Request request) {
         int distance = elevator.distanceTo(request.getFloor());
 

@@ -11,6 +11,9 @@ public class NoElevatorAvailableException extends ElevatorException {
 
     private static final long serialVersionUID = 1L;
 
+    /**
+     * @param message description of the request that could not be assigned
+     */
     public NoElevatorAvailableException(String message) {
         super(message);
     }

@@ -9,6 +9,7 @@ public class ControllerNotInitializedException extends ElevatorException {
 
     private static final long serialVersionUID = 1L;
 
+    /** Creates the exception with a message explaining how to initialize the controller. */
     public ControllerNotInitializedException() {
         super("ElevatorController has not been initialized. Call getInstance(elevatorCount, capacityPerElevator) first.");
     }
