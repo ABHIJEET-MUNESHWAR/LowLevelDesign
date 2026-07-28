@@ -8,7 +8,7 @@ A time-driven simulation of **one elevator** in a **20-floor** building
 
 
 
-
+```
 Problem Statement
 
 Design and implement a program that simulates an elevator in a building with multiple floors that efficiently manages elevator movements to minimize passenger wait times and travel distances.
@@ -31,21 +31,6 @@ For simplicity, assume that the elevator has unlimited capacity.
 Time interval constraints
 The elevator takes 1 min to move from one floor to the next, irrespective of direction.  
 The elevator stops at any floor for 1 min.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -91,9 +76,6 @@ Output
 
 
 
-
-
-
 Sample 3 (Requests in the opposite direction, delayed down request)
 Input
 T0, A, 2, UP, 10
@@ -104,7 +86,6 @@ Output
 10 A OUT
 8 B IN
 4 B OUT
-
 
 
 
@@ -131,14 +112,14 @@ Output
 4 B IN
 12 B OUT
 
+
+
 Sample 6 (Multiple opposite requests)
 Input
 T0, A, 4, UP, 14
 T3, B, 8, DOWN, 3
 T7, C, 5, UP, 8
 T8, D, 16, DOWN, 1
-
-
 
 Output
 4 A IN
@@ -151,15 +132,14 @@ Output
 8 C OUT
 
 
-
-
-
 Expectations from the candidate
 Functional Completeness:Accurately implements elevator logic covering all rules, timing, and multiple requests with correct output.
 Code Design & Structure: Writes clean, modular code with clear organization and separation of concerns.
 Data Structures & Logic: Uses appropriate and efficient data structures with clear and effective logic.
 Input Validation & Error Handling: Validates inputs properly and handles errors gracefully without crashes.
 Scalability and Extensibility: Writes flexible code that can be easily extended to add new features.
+
+```
 
 ## Problem rules modelled
 
